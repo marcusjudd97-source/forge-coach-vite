@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { buildAthleteContext, buildSystemPrompt } from './context.js';
 
 function formatMessage(text, accentColor) {
   if (!text) return [];
@@ -94,20 +95,26 @@ function formatMessage(text, accentColor) {
   return out;
 }
 
-export default function ChatWindow({ coach, apiKey }) {
-  const [messages, setMessages] = useState([]);
+export default function ChatWindow({
+  coach,
+  apiKey,
+  messages,
+  onMessagesChange,
+  profile,
+  planText,
+  weekPlan,
+  log,
+  voiceNote,
+  onSavePlanFromMessage,
+  onClearChat,
+}) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [started, setStarted] = useState(false);
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
 
-  useEffect(() => {
-    setMessages([]);
-    setInput('');
-    setLoading(false);
-    setStarted(false);
-  }, [coach.id]);
+  const started = (messages || []).length > 0;
+  const isFelix = coach.id === 'racePlanning';
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -122,6 +129,17 @@ export default function ChatWindow({ coach, apiKey }) {
     textareaRef.current.style.height = `${next}px`;
   }, [input]);
 
+  function buildSystem() {
+    const ctx = buildAthleteContext({
+      profile,
+      planText,
+      weekPlan,
+      log,
+      voiceNote,
+    });
+    return buildSystemPrompt(coach.systemPrompt, ctx);
+  }
+
   async function callClaude(history) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -133,14 +151,14 @@ export default function ChatWindow({ coach, apiKey }) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: coach.systemPrompt,
+        max_tokens: 1600,
+        system: buildSystem(),
         messages: history,
       }),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`${res.status} ${res.statusText}${text ? ` — ${text.slice(0, 180)}` : ''}`);
+      throw new Error(`${res.status} ${res.statusText}${text ? ` — ${text.slice(0, 200)}` : ''}`);
     }
     const data = await res.json();
     const parts = Array.isArray(data.content) ? data.content : [];
@@ -154,16 +172,16 @@ export default function ChatWindow({ coach, apiKey }) {
   async function sendMessage(text) {
     const content = (text ?? input).trim();
     if (!content || loading) return;
-    const newHistory = [...messages, { role: 'user', content }];
-    setMessages(newHistory);
+    const newHistory = [...(messages || []), { role: 'user', content }];
+    onMessagesChange(newHistory);
     setInput('');
     setLoading(true);
 
     try {
       const reply = await callClaude(newHistory);
-      setMessages([...newHistory, { role: 'assistant', content: reply || '…' }]);
+      onMessagesChange([...newHistory, { role: 'assistant', content: reply || '…' }]);
     } catch (err) {
-      setMessages([
+      onMessagesChange([
         ...newHistory,
         {
           role: 'assistant',
@@ -176,17 +194,16 @@ export default function ChatWindow({ coach, apiKey }) {
   }
 
   async function handleStart() {
-    setStarted(true);
     setLoading(true);
     const greetingPrompt =
-      "Please introduce yourself as my coach on the FORGE team and ask me the onboarding questions you need in order to start coaching me well. Keep the greeting warm but concise.";
+      "Please introduce yourself as my coach on the FORGE team. Read my athlete profile in your system context carefully. If my profile is empty or missing crucial pieces, ask the onboarding questions you need in order to start coaching me well. If my profile is well-filled, acknowledge what you've read about me and dive straight into useful coaching — don't re-ask questions I've already answered. Keep the opening message tight and warm.";
     const newHistory = [{ role: 'user', content: greetingPrompt }];
-    setMessages(newHistory);
+    onMessagesChange(newHistory);
     try {
       const reply = await callClaude(newHistory);
-      setMessages([...newHistory, { role: 'assistant', content: reply || '…' }]);
+      onMessagesChange([...newHistory, { role: 'assistant', content: reply || '…' }]);
     } catch (err) {
-      setMessages([
+      onMessagesChange([
         ...newHistory,
         {
           role: 'assistant',
@@ -207,6 +224,7 @@ export default function ChatWindow({ coach, apiKey }) {
 
   const accent = coach.accentColor;
 
+  // Landing state
   if (!started) {
     return (
       <div
@@ -275,6 +293,7 @@ export default function ChatWindow({ coach, apiKey }) {
 
           <button
             onClick={handleStart}
+            disabled={loading}
             style={{
               display: 'inline-block',
               padding: '14px 32px',
@@ -286,20 +305,19 @@ export default function ChatWindow({ coach, apiKey }) {
               letterSpacing: '0.18em',
               fontWeight: 600,
               marginBottom: 28,
-              cursor: 'pointer',
+              cursor: loading ? 'wait' : 'pointer',
+              opacity: loading ? 0.6 : 1,
             }}
           >
-            START SESSION →
+            {loading ? 'OPENING…' : 'START SESSION →'}
           </button>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {coach.suggestedPrompts.map((p, idx) => (
               <button
                 key={idx}
-                onClick={() => {
-                  setStarted(true);
-                  sendMessage(p);
-                }}
+                onClick={() => sendMessage(p)}
+                disabled={loading}
                 style={{
                   width: '100%',
                   padding: '12px 16px',
@@ -311,7 +329,7 @@ export default function ChatWindow({ coach, apiKey }) {
                   fontSize: 15,
                   fontStyle: 'italic',
                   textAlign: 'left',
-                  cursor: 'pointer',
+                  cursor: loading ? 'wait' : 'pointer',
                   transition: 'background 150ms ease, border-color 150ms ease',
                 }}
                 onMouseEnter={(e) => {
@@ -330,6 +348,11 @@ export default function ChatWindow({ coach, apiKey }) {
     );
   }
 
+  // Chat state
+  const lastAssistant = [...(messages || [])].reverse().find((m) => m.role === 'assistant');
+  const showSavePlanBtn =
+    isFelix && lastAssistant && lastAssistant.content && lastAssistant.content.length > 200;
+
   return (
     <div
       style={{
@@ -339,6 +362,60 @@ export default function ChatWindow({ coach, apiKey }) {
         flexDirection: 'column',
       }}
     >
+      {(showSavePlanBtn || messages.length > 0) && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            padding: '8px 14px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--bg2)',
+            flexWrap: 'wrap',
+          }}
+        >
+          {showSavePlanBtn && (
+            <button
+              onClick={() => onSavePlanFromMessage(lastAssistant.content)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                background: coach.accentDim,
+                border: `1px solid ${coach.accentBorder}`,
+                color: coach.accentColor,
+                fontFamily: 'var(--font-display)',
+                fontSize: 11,
+                letterSpacing: '0.18em',
+                cursor: 'pointer',
+              }}
+            >
+              SAVE LAST REPLY AS PLAN
+            </button>
+          )}
+          <button
+            onClick={() => {
+              if (window.confirm(`Clear your conversation with ${coach.name}? This cannot be undone.`)) {
+                onClearChat();
+              }
+            }}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 8,
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              color: 'var(--text-dim)',
+              fontFamily: 'var(--font-display)',
+              fontSize: 11,
+              letterSpacing: '0.18em',
+              cursor: 'pointer',
+            }}
+          >
+            CLEAR CHAT
+          </button>
+        </div>
+      )}
+
       <div
         ref={scrollRef}
         style={{
@@ -358,6 +435,10 @@ export default function ChatWindow({ coach, apiKey }) {
           }}
         >
           {messages.map((m, idx) => {
+            // Hide the first synthetic greeting prompt — it's a scaffolding message
+            if (idx === 0 && m.role === 'user' && m.content.startsWith('Please introduce yourself')) {
+              return null;
+            }
             if (m.role === 'user') {
               return (
                 <div key={idx} style={{ display: 'flex', justifyContent: 'flex-end' }}>
