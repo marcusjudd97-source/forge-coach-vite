@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { storage, DAY_ORDER, dayLabel } from './storage.js';
+import { storage, DAY_ORDER, dayLabel, todayKey, daysUntil } from './storage.js';
 import {
   Section,
   Field,
@@ -10,9 +10,44 @@ import {
   ViewHeader,
   ViewBody,
 } from './ui.jsx';
+import QuickLog from './QuickLog.jsx';
 
 function makeMilestoneId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function inferDiscipline(text) {
+  const t = (text || '').toLowerCase();
+  if (/brick/.test(t)) return 'brick';
+  if (/\b(swim|pool|csa?|css|100m|open water|ow\b)/.test(t)) return 'swim';
+  if (/\b(bike|ride|turbo|kickr|ftp|watts|zwift|cycling)/.test(t)) return 'bike';
+  if (/\b(run|running|parkrun|marathon|5k|10k|half)/.test(t)) return 'run';
+  if (/\b(strength|gym|lift|weights|squat|deadlift|mobility|core)/.test(t)) return 'strength';
+  if (/\brest\b/.test(t)) return 'rest';
+  return 'other';
+}
+
+function dateForDay(weekStarts, dayKey) {
+  if (!weekStarts) return '';
+  const base = new Date(weekStarts + 'T00:00:00');
+  if (Number.isNaN(base.getTime())) return '';
+  const idx = DAY_ORDER.indexOf(dayKey);
+  if (idx < 0) return '';
+  const d = new Date(base);
+  d.setDate(base.getDate() + idx);
+  return d.toISOString().slice(0, 10);
+}
+
+function entryForDate(log, date) {
+  if (!date) return null;
+  return [...(log || [])].reverse().find((e) => e.date === date) || null;
+}
+
+function statusPill(status) {
+  if (!status || status === 'done') return { label: 'DONE', color: '#6fb241', bg: 'rgba(111, 178, 65, 0.12)' };
+  if (status === 'modified') return { label: 'MODIFIED', color: '#c8922a', bg: 'rgba(200, 146, 42, 0.14)' };
+  if (status === 'skipped') return { label: 'SKIPPED', color: '#e0918a', bg: 'rgba(224, 145, 138, 0.14)' };
+  return null;
 }
 
 export default function PlanView({
@@ -20,21 +55,109 @@ export default function PlanView({
   onPlanTextChange,
   weekPlan,
   onWeekPlanChange,
+  log,
+  onLogChange,
   milestones,
   onMilestonesChange,
   onAskFelix,
   onAskKira,
 }) {
   const [draftPlan, setDraftPlan] = useState(planText || '');
-  const [draftWeek, setDraftWeek] = useState(weekPlan);
-  const [saved, setSaved] = useState(false);
+  const [masterSaved, setMasterSaved] = useState(false);
+  const [showMaster, setShowMaster] = useState(false);
+  const [showMilestones, setShowMilestones] = useState(false);
+  const [editingDay, setEditingDay] = useState(null);
+  const [editingText, setEditingText] = useState('');
+  const [quickLog, setQuickLog] = useState(null);
   const [newMilestone, setNewMilestone] = useState({ targetDate: '', title: '', notes: '' });
+
+  const today = todayKey();
+  const todayIdx = DAY_ORDER.indexOf(today);
+  const orderedDays = [];
+  for (let i = 0; i < 7; i++) orderedDays.push(DAY_ORDER[(todayIdx + i) % 7]);
+
+  function updateWeek(partial) {
+    const next = { ...weekPlan, ...partial };
+    storage.setWeekPlan(next);
+    onWeekPlanChange(next);
+  }
+
+  function updateFeedback(d, v) {
+    const nextFeedback = { ...(weekPlan.feedback || {}), [d]: v };
+    updateWeek({ feedback: nextFeedback });
+  }
+
+  function startEdit(d) {
+    setEditingDay(d);
+    setEditingText(weekPlan[d] || '');
+  }
+  function commitEdit() {
+    if (editingDay) updateWeek({ [editingDay]: editingText });
+    setEditingDay(null);
+    setEditingText('');
+  }
+
+  function saveMaster() {
+    storage.setPlanText(draftPlan);
+    onPlanTextChange(draftPlan);
+    setMasterSaved(true);
+    setTimeout(() => setMasterSaved(false), 2200);
+  }
+  function clearMaster() {
+    if (!window.confirm('Clear the master plan?')) return;
+    setDraftPlan('');
+    storage.setPlanText('');
+    onPlanTextChange('');
+  }
+
+  function openQuickLog(dayKey) {
+    const dateStr = dateForDay(weekPlan.weekStarts, dayKey) || new Date().toISOString().slice(0, 10);
+    const session = weekPlan[dayKey] || '';
+    const discipline = inferDiscipline(session);
+    const prev = entryForDate(log, dateStr);
+    setQuickLog({ dayKey, dateString: dateStr, session, discipline, prevEntry: prev });
+  }
+
+  function saveQuickLog(data) {
+    const id = quickLog?.prevEntry?.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const entry = {
+      id,
+      date: data.date,
+      discipline: data.discipline || 'other',
+      status: data.status,
+      planned: data.planned || '',
+      actual: data.notes,
+      rpe: data.rpe,
+      avgHr: data.avgHr,
+      avgPower: '',
+      durationMin: data.durationMin,
+      notes: data.notes,
+    };
+    const existing = (log || []).filter((e) => e.id !== id);
+    const next = [...existing, entry].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    storage.setLog(next);
+    onLogChange(next);
+
+    if (quickLog?.dayKey) {
+      const shortFeedback = [
+        data.status && data.status !== 'done' ? `[${data.status}]` : '',
+        data.rpe ? `RPE ${data.rpe}` : '',
+        data.avgHr ? `HR ${data.avgHr}` : '',
+        data.durationMin ? `${data.durationMin}min` : '',
+        data.notes,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      updateFeedback(quickLog.dayKey, shortFeedback);
+    }
+
+    setQuickLog(null);
+  }
 
   function saveMilestones(next) {
     storage.setMilestones(next);
     onMilestonesChange(next);
   }
-
   function addMilestone() {
     const title = (newMilestone.title || '').trim();
     if (!title) return;
@@ -51,354 +174,389 @@ export default function PlanView({
     saveMilestones(next);
     setNewMilestone({ targetDate: '', title: '', notes: '' });
   }
-
   function toggleMilestone(id) {
-    const next = (milestones || []).map((m) => (m.id === id ? { ...m, done: !m.done } : m));
-    saveMilestones(next);
+    saveMilestones((milestones || []).map((m) => (m.id === id ? { ...m, done: !m.done } : m)));
   }
-
   function deleteMilestone(id) {
     if (!window.confirm('Delete this milestone?')) return;
-    const next = (milestones || []).filter((m) => m.id !== id);
-    saveMilestones(next);
+    saveMilestones((milestones || []).filter((m) => m.id !== id));
   }
 
-  function clearAllMilestones() {
-    if (!window.confirm('Clear ALL milestones? This cannot be undone.')) return;
-    saveMilestones([]);
-  }
+  function DayCard({ dayKey, isHero }) {
+    const date = dateForDay(weekPlan.weekStarts, dayKey);
+    const session = weekPlan[dayKey] || '';
+    const feedback = weekPlan.feedback?.[dayKey] || '';
+    const entry = entryForDate(log, date);
+    const pill = entry ? statusPill(entry.status) : null;
+    const isToday = dayKey === today;
+    const daysOut = date ? daysUntil(date) : null;
 
-  function saveAll() {
-    storage.setPlanText(draftPlan);
-    storage.setWeekPlan(draftWeek);
-    onPlanTextChange(draftPlan);
-    onWeekPlanChange(draftWeek);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2200);
-  }
+    return (
+      <div
+        style={{
+          border: `1px solid ${isToday ? 'rgba(200, 146, 42, 0.45)' : 'var(--border)'}`,
+          background: isToday ? 'rgba(200, 146, 42, 0.08)' : 'var(--bg3)',
+          borderRadius: 14,
+          padding: isHero ? 18 : 14,
+          marginBottom: 10,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+            marginBottom: 8,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <span
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: isHero ? 15 : 13,
+                letterSpacing: '0.22em',
+                color: isToday ? 'var(--gold)' : 'var(--text-mid)',
+              }}
+            >
+              {isToday ? 'TODAY' : dayLabel(dayKey).toUpperCase()}
+            </span>
+            {date && (
+              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                {date}
+                {daysOut != null && daysOut > 0 && daysOut <= 7 ? ` · in ${daysOut}d` : ''}
+              </span>
+            )}
+          </div>
+          {pill && (
+            <span
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 10,
+                letterSpacing: '0.18em',
+                padding: '3px 8px',
+                borderRadius: 999,
+                background: pill.bg,
+                color: pill.color,
+              }}
+            >
+              {pill.label}
+            </span>
+          )}
+        </div>
 
-  function updateDay(d, v) {
-    setDraftWeek((w) => ({ ...w, [d]: v }));
-    setSaved(false);
-  }
+        {editingDay === dayKey ? (
+          <>
+            <TextArea
+              rows={3}
+              value={editingText}
+              onChange={setEditingText}
+              placeholder="e.g. Bike threshold 75 min"
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <GhostButton onClick={() => setEditingDay(null)}>Cancel</GhostButton>
+              <GoldButton onClick={commitEdit}>Save</GoldButton>
+            </div>
+          </>
+        ) : (
+          <div
+            onClick={() => startEdit(dayKey)}
+            style={{
+              color: session ? 'var(--text)' : 'var(--text-dim)',
+              fontSize: isHero ? 17 : 15,
+              lineHeight: 1.45,
+              fontStyle: session ? 'normal' : 'italic',
+              whiteSpace: 'pre-wrap',
+              marginBottom: 10,
+              cursor: 'text',
+            }}
+          >
+            {session || 'Tap to add a session.'}
+          </div>
+        )}
 
-  function updateFeedback(d, v) {
-    setDraftWeek((w) => ({
-      ...w,
-      feedback: { ...(w.feedback || {}), [d]: v },
-    }));
-    setSaved(false);
-  }
+        {entry && (
+          <div
+            style={{
+              fontSize: 13,
+              color: 'var(--text-mid)',
+              lineHeight: 1.4,
+              padding: '8px 12px',
+              background: 'var(--bg2)',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              marginBottom: 10,
+            }}
+          >
+            <div style={{ color: 'var(--text-dim)', fontSize: 11, letterSpacing: '0.14em', fontFamily: 'var(--font-display)', marginBottom: 4 }}>
+              HOW IT WENT
+            </div>
+            {[
+              entry.rpe && `RPE ${entry.rpe}`,
+              entry.avgHr && `HR ${entry.avgHr}`,
+              entry.durationMin && `${entry.durationMin} min`,
+            ].filter(Boolean).join(' · ') || ' '}
+            {entry.notes && (
+              <div style={{ marginTop: 4, fontStyle: 'italic', color: 'var(--text)' }}>
+                {entry.notes}
+              </div>
+            )}
+          </div>
+        )}
 
-  function clearPlan() {
-    if (!window.confirm('Clear the master plan? This cannot be undone.')) return;
-    setDraftPlan('');
-    storage.setPlanText('');
-    onPlanTextChange('');
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <GoldButton onClick={() => openQuickLog(dayKey)} style={isHero ? { fontSize: 14, padding: '14px 28px' } : undefined}>
+            {entry ? 'EDIT LOG' : 'LOG THIS'}
+          </GoldButton>
+          {!editingDay && session && (
+            <GhostButton onClick={() => startEdit(dayKey)}>Edit session</GhostButton>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (
     <>
       <ViewHeader
         title="YOUR PLAN"
-        subtitle="Felix writes the long plan. You run it day by day. Every coach reads both when advising you."
-        right={<GoldButton onClick={saveAll}>{saved ? 'SAVED ✓' : 'SAVE'}</GoldButton>}
+        subtitle={
+          weekPlan.weekFocus
+            ? `This week — ${weekPlan.weekFocus}`
+            : 'Ask Kira to write your week; tap any day to log it.'
+        }
+        right={
+          onAskKira ? (
+            <GoldButton onClick={() => onAskKira()}>TALK TO KIRA</GoldButton>
+          ) : null
+        }
       />
       <ViewBody>
-        <Section title="This week">
+        <DayCard dayKey={today} isHero />
+
+        <Section title="Rest of the week">
+          {orderedDays.slice(1).map((d) => (
+            <DayCard key={d} dayKey={d} />
+          ))}
           <div
             style={{
+              marginTop: 10,
+              padding: 10,
+              fontSize: 12,
+              color: 'var(--text-dim)',
+              textAlign: 'center',
+              fontStyle: 'italic',
+            }}
+          >
+            Week starts: {weekPlan.weekStarts || '—'} · Focus:{' '}
+            {weekPlan.weekFocus || '—'}
+          </div>
+        </Section>
+
+        <Section>
+          <button
+            onClick={() => setShowMilestones((s) => !s)}
+            style={{
+              width: '100%',
+              padding: 6,
+              background: 'transparent',
+              color: 'var(--text)',
               display: 'flex',
-              gap: 10,
-              marginBottom: 14,
-              flexWrap: 'wrap',
+              justifyContent: 'space-between',
               alignItems: 'center',
+              cursor: 'pointer',
             }}
           >
-            {onAskKira && (
-              <GoldButton onClick={() => onAskKira()}>
-                PLAN THIS WEEK WITH KIRA →
-              </GoldButton>
-            )}
-            <span style={{ color: 'var(--text-dim)', fontSize: 13, fontStyle: 'italic' }}>
-              Kira reads your profile, master plan and last 10 log entries.
+            <span
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 15,
+                letterSpacing: '0.22em',
+                color: 'var(--gold)',
+              }}
+            >
+              MILESTONES ({(milestones || []).length})
             </span>
-          </div>
-          <Field label="Week starting (YYYY-MM-DD)">
-            <TextInput
-              type="date"
-              value={draftWeek.weekStarts}
-              onChange={(v) => updateDay('weekStarts', v)}
-            />
-          </Field>
-          <div style={{ height: 10 }} />
-          <Field label="Focus of the week">
-            <TextInput
-              value={draftWeek.weekFocus}
-              onChange={(v) => updateDay('weekFocus', v)}
-              placeholder="Aerobic base — volume over intensity"
-            />
-          </Field>
-          <div style={{ height: 14 }} />
+            <span style={{ color: 'var(--text-dim)' }}>{showMilestones ? '▲' : '▼'}</span>
+          </button>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {DAY_ORDER.map((d) => (
-              <div
-                key={d}
-                style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: 12,
-                  padding: 12,
-                  background: 'var(--bg3)',
-                }}
-              >
-                <div
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontSize: 13,
-                    letterSpacing: '0.22em',
-                    color: 'var(--gold)',
-                    marginBottom: 8,
-                  }}
-                >
-                  {dayLabel(d).toUpperCase()}
-                </div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    letterSpacing: '0.14em',
-                    fontFamily: 'var(--font-display)',
-                    color: 'var(--text-dim)',
-                    textTransform: 'uppercase',
-                    marginBottom: 4,
-                  }}
-                >
-                  Session
-                </div>
-                <TextArea
-                  rows={2}
-                  value={draftWeek[d]}
-                  onChange={(v) => updateDay(d, v)}
-                  placeholder="Swim 3km — 5×400 @ CSS"
-                />
-                <div
-                  style={{
-                    fontSize: 11,
-                    letterSpacing: '0.14em',
-                    fontFamily: 'var(--font-display)',
-                    color: 'var(--text-dim)',
-                    textTransform: 'uppercase',
-                    margin: '10px 0 4px',
-                  }}
-                >
-                  How it went (feedback — Kira reads this)
-                </div>
-                <TextArea
-                  rows={2}
-                  value={draftWeek.feedback?.[d] || ''}
-                  onChange={(v) => updateFeedback(d, v)}
-                  placeholder="e.g. Felt flat in the warmup, dialled it in by the main set. RPE 7."
-                />
-              </div>
-            ))}
-          </div>
-        </Section>
-
-        <Section title="Master plan (Kira's long-view document)">
-          <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 10 }}>
-            The arc from today to race day. When Kira writes your full plan in chat, hit
-            "Save last reply as plan" at the top of her chat to drop it here automatically.
-          </div>
-          <TextArea
-            rows={18}
-            value={draftPlan}
-            onChange={(v) => {
-              setDraftPlan(v);
-              setSaved(false);
-            }}
-            placeholder="## Phase 1 — Base (Weeks 1-12)\n- 8-10 hrs/week\n- Aerobic bias (Z1-Z2), technique work, strength 2x/week\n- Key sessions: long ride Sat, long run Sun, threshold swim Tue\n\n..."
-          />
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, flexWrap: 'wrap', gap: 8 }}>
-            <GhostButton onClick={clearPlan} style={{ color: '#e0918a' }}>
-              Clear plan
-            </GhostButton>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {showMilestones && (
+            <div style={{ marginTop: 14 }}>
               {onAskKira && (
-                <GhostButton onClick={() => onAskKira()}>Talk to Kira</GhostButton>
+                <div style={{ marginBottom: 12 }}>
+                  <GhostButton onClick={() => onAskKira()}>GENERATE WITH KIRA</GhostButton>
+                </div>
               )}
-              {onAskFelix && (
-                <GhostButton onClick={() => onAskFelix()}>Race-day with Felix</GhostButton>
-              )}
-              <GoldButton onClick={saveAll}>{saved ? 'SAVED ✓' : 'SAVE PLAN'}</GoldButton>
-            </div>
-          </div>
-        </Section>
 
-        <Section title="Milestones">
-          <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 14, lineHeight: 1.5 }}>
-            Dated markers on the road to race day — fitness tests, volume benchmarks, race rehearsals,
-            phase transitions. Every coach reads these in their context.
-          </div>
-          {onAskKira && (
-            <div style={{ marginBottom: 16 }}>
-              <GoldButton onClick={() => onAskKira()}>
-                GENERATE MILESTONES WITH KIRA →
-              </GoldButton>
-            </div>
-          )}
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '140px 1fr',
-              gap: 10,
-              padding: 12,
-              borderRadius: 12,
-              background: 'var(--bg3)',
-              border: '1px solid var(--border)',
-              marginBottom: 14,
-            }}
-          >
-            <Field label="Target date">
-              <TextInput
-                type="date"
-                value={newMilestone.targetDate}
-                onChange={(v) => setNewMilestone((n) => ({ ...n, targetDate: v }))}
-              />
-            </Field>
-            <Field label="Title">
-              <TextInput
-                value={newMilestone.title}
-                onChange={(v) => setNewMilestone((n) => ({ ...n, title: v }))}
-                placeholder="First 100km ride"
-              />
-            </Field>
-            <div style={{ gridColumn: 'span 2' }}>
-              <Field label="Notes (optional)">
-                <TextInput
-                  value={newMilestone.notes}
-                  onChange={(v) => setNewMilestone((n) => ({ ...n, notes: v }))}
-                  placeholder="Steady Z2, fuel at 75 g/hr, no bonks."
-                />
-              </Field>
-            </div>
-            <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end' }}>
-              <GoldButton onClick={addMilestone} disabled={!newMilestone.title.trim()}>
-                ADD MILESTONE
-              </GoldButton>
-            </div>
-          </div>
-
-          {(milestones || []).length === 0 && (
-            <div style={{ color: 'var(--text-dim)', fontStyle: 'italic', padding: 10 }}>
-              No milestones yet. Either add one above, or ask Kira to generate a full set based on your
-              race date.
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(milestones || []).map((m) => (
               <div
-                key={m.id}
                 style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 12,
+                  display: 'grid',
+                  gridTemplateColumns: '140px 1fr',
+                  gap: 10,
                   padding: 12,
-                  border: '1px solid var(--border)',
                   borderRadius: 12,
-                  background: m.done ? 'rgba(74, 138, 42, 0.08)' : 'var(--bg3)',
-                  opacity: m.done ? 0.75 : 1,
+                  background: 'var(--bg3)',
+                  border: '1px solid var(--border)',
+                  marginBottom: 14,
                 }}
               >
-                <button
-                  onClick={() => toggleMilestone(m.id)}
-                  aria-label={m.done ? 'Mark as pending' : 'Mark as done'}
-                  style={{
-                    flexShrink: 0,
-                    width: 26,
-                    height: 26,
-                    borderRadius: 6,
-                    border: `1.5px solid ${m.done ? '#6fb241' : 'var(--border)'}`,
-                    background: m.done ? 'rgba(111, 178, 65, 0.2)' : 'transparent',
-                    color: '#6fb241',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginTop: 2,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {m.done && (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
-                </button>
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <Field label="Target date">
+                  <TextInput
+                    type="date"
+                    value={newMilestone.targetDate}
+                    onChange={(v) => setNewMilestone((n) => ({ ...n, targetDate: v }))}
+                  />
+                </Field>
+                <Field label="Title">
+                  <TextInput
+                    value={newMilestone.title}
+                    onChange={(v) => setNewMilestone((n) => ({ ...n, title: v }))}
+                    placeholder="First 100km ride"
+                  />
+                </Field>
+                <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end' }}>
+                  <GoldButton onClick={addMilestone} disabled={!newMilestone.title.trim()}>
+                    ADD
+                  </GoldButton>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(milestones || []).map((m) => (
                   <div
+                    key={m.id}
                     style={{
                       display: 'flex',
-                      gap: 10,
-                      alignItems: 'baseline',
-                      flexWrap: 'wrap',
+                      gap: 12,
+                      padding: 10,
+                      border: '1px solid var(--border)',
+                      borderRadius: 10,
+                      background: m.done ? 'rgba(74, 138, 42, 0.08)' : 'var(--bg3)',
+                      opacity: m.done ? 0.75 : 1,
                     }}
                   >
-                    <span
+                    <button
+                      onClick={() => toggleMilestone(m.id)}
                       style={{
-                        fontFamily: 'var(--font-display)',
-                        fontSize: 12,
-                        letterSpacing: '0.18em',
-                        color: 'var(--gold)',
+                        flexShrink: 0,
+                        width: 22,
+                        height: 22,
+                        borderRadius: 6,
+                        border: `1.5px solid ${m.done ? '#6fb241' : 'var(--border)'}`,
+                        background: m.done ? 'rgba(111, 178, 65, 0.2)' : 'transparent',
+                        color: '#6fb241',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginTop: 2,
+                        cursor: 'pointer',
                       }}
                     >
-                      {m.targetDate || '—'}
-                    </span>
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 16,
-                        color: 'var(--text)',
-                        textDecoration: m.done ? 'line-through' : 'none',
-                      }}
-                    >
-                      {m.title}
-                    </span>
-                  </div>
-                  {m.notes && (
-                    <div style={{ fontSize: 14, color: 'var(--text-mid)', marginTop: 4, fontStyle: 'italic' }}>
-                      {m.notes}
+                      {m.done && '✓'}
+                    </button>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'baseline' }}>
+                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 11, letterSpacing: '0.16em', color: 'var(--gold)' }}>
+                          {m.targetDate || '—'}
+                        </span>
+                        <span style={{ fontSize: 15, textDecoration: m.done ? 'line-through' : 'none' }}>
+                          {m.title}
+                        </span>
+                      </div>
+                      {m.notes && (
+                        <div style={{ fontSize: 13, color: 'var(--text-mid)', fontStyle: 'italic', marginTop: 3 }}>
+                          {m.notes}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => deleteMilestone(m.id)}
-                  style={{
-                    flexShrink: 0,
-                    padding: '4px 10px',
-                    borderRadius: 8,
-                    background: 'transparent',
-                    border: '1px solid var(--border)',
-                    color: '#e0918a',
-                    fontSize: 12,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Delete
-                </button>
+                    <button
+                      onClick={() => deleteMilestone(m.id)}
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        background: 'transparent',
+                        border: '1px solid var(--border)',
+                        color: '#e0918a',
+                        fontSize: 11,
+                        cursor: 'pointer',
+                        alignSelf: 'flex-start',
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
+        </Section>
 
-          {(milestones || []).length > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
-              <GhostButton onClick={clearAllMilestones} style={{ color: '#e0918a' }}>
-                Clear all milestones
-              </GhostButton>
+        <Section>
+          <button
+            onClick={() => setShowMaster((s) => !s)}
+            style={{
+              width: '100%',
+              padding: 6,
+              background: 'transparent',
+              color: 'var(--text)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 15,
+                letterSpacing: '0.22em',
+                color: 'var(--gold)',
+              }}
+            >
+              MASTER PLAN
+            </span>
+            <span style={{ color: 'var(--text-dim)' }}>{showMaster ? '▲' : '▼'}</span>
+          </button>
+
+          {showMaster && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 10 }}>
+                The arc from today to race day. Kira writes it; she also writes each week from it.
+              </div>
+              <TextArea
+                rows={14}
+                value={draftPlan}
+                onChange={(v) => {
+                  setDraftPlan(v);
+                  setMasterSaved(false);
+                }}
+                placeholder="## Phase 1 — Base ..."
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, flexWrap: 'wrap', gap: 8 }}>
+                <GhostButton onClick={clearMaster} style={{ color: '#e0918a' }}>Clear</GhostButton>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {onAskFelix && (
+                    <GhostButton onClick={() => onAskFelix()}>Race-day with Felix</GhostButton>
+                  )}
+                  <GoldButton onClick={saveMaster}>{masterSaved ? 'SAVED ✓' : 'SAVE MASTER PLAN'}</GoldButton>
+                </div>
+              </div>
             </div>
           )}
         </Section>
       </ViewBody>
+
+      <QuickLog
+        open={!!quickLog}
+        dayLabel={quickLog ? dayLabel(quickLog.dayKey) : ''}
+        dateString={quickLog?.dateString || ''}
+        discipline={quickLog?.discipline || 'other'}
+        sessionText={quickLog?.session || ''}
+        prevEntry={quickLog?.prevEntry}
+        onSave={saveQuickLog}
+        onClose={() => setQuickLog(null)}
+      />
     </>
   );
 }

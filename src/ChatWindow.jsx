@@ -3,8 +3,10 @@ import { buildAthleteContext, buildSystemPrompt } from './context.js';
 import {
   hasWeekBlock,
   hasMilestonesBlock,
+  hasProfileBlock,
   parseWeekBlock,
   parseMilestonesBlock,
+  parseProfileBlock,
   stripForgeBlocks,
 } from './parsers.js';
 
@@ -116,6 +118,7 @@ export default function ChatWindow({
   onSavePlanFromMessage,
   onApplyWeekPlan,
   onApplyMilestones,
+  onApplyProfileUpdates,
   onClearChat,
 }) {
   const [input, setInput] = useState('');
@@ -131,6 +134,19 @@ export default function ChatWindow({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, loading]);
+
+  // Auto-apply profile updates from the latest assistant message (silent)
+  useEffect(() => {
+    if (!onApplyProfileUpdates) return;
+    const arr = messages || [];
+    if (!arr.length) return;
+    const last = arr[arr.length - 1];
+    if (!last || last.role !== 'assistant') return;
+    if (!hasProfileBlock(last.content)) return;
+    const updates = parseProfileBlock(last.content);
+    if (updates) onApplyProfileUpdates(updates);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
 
   useEffect(() => {
     if (!textareaRef.current) return;

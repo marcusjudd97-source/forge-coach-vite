@@ -15,7 +15,14 @@ const NAV = [
   { id: 'home', label: 'Home', icon: '🏠' },
   { id: 'plan', label: 'Plan', icon: '📋' },
   { id: 'coaches', label: 'Coaches', icon: '💬' },
-  { id: 'log', label: 'Log', icon: '📊' },
+  { id: 'profile', label: 'Profile', icon: '👤' },
+];
+
+const DESKTOP_NAV = [
+  { id: 'home', label: 'Home', icon: '🏠' },
+  { id: 'plan', label: 'Plan', icon: '📋' },
+  { id: 'coaches', label: 'Coaches', icon: '💬' },
+  { id: 'log', label: 'Log (history)', icon: '📊' },
   { id: 'profile', label: 'Profile', icon: '👤' },
 ];
 
@@ -67,7 +74,7 @@ function Brand({ compact }) {
   );
 }
 
-function DesktopSidebar({ view, onNav, onSettings, activeCoach, onSelectCoach, showCoaches }) {
+function DesktopSidebar({ view, onNav, onSettings, activeCoach, onSelectCoach, showCoaches, navItems }) {
   return (
     <aside
       style={{
@@ -97,7 +104,7 @@ function DesktopSidebar({ view, onNav, onSettings, activeCoach, onSelectCoach, s
 
       <nav style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {NAV.map((n) => {
+          {(navItems || NAV).map((n) => {
             const active = n.id === view;
             return (
               <button
@@ -416,6 +423,14 @@ export default function App() {
     window.alert(`Added ${parsed.length} milestones. See Plan → Milestones.`);
   }
 
+  function applyProfileUpdates(updates) {
+    if (!updates || !Object.keys(updates).length) return;
+    const current = storage.getProfile();
+    const next = { ...current, ...updates };
+    storage.setProfile(next);
+    setProfile(next);
+  }
+
   function openCoach(id) {
     setActiveCoach(id);
     setView('coaches');
@@ -503,6 +518,8 @@ export default function App() {
         onPlanTextChange={setPlanText}
         weekPlan={weekPlan}
         onWeekPlanChange={setWeekPlan}
+        log={log}
+        onLogChange={setLog}
         milestones={milestones}
         onMilestonesChange={setMilestones}
         onAskFelix={() => openCoach('racePlanning')}
@@ -512,7 +529,13 @@ export default function App() {
   } else if (view === 'log') {
     body = <LogView log={log} onLogChange={setLog} />;
   } else if (view === 'profile') {
-    body = <ProfileView profile={profile} onProfileChange={setProfile} />;
+    body = (
+      <ProfileView
+        profile={profile}
+        onProfileChange={setProfile}
+        onAskKira={() => openCoach('headCoach')}
+      />
+    );
   } else if (view === 'coaches') {
     if (!coach) {
       body = <CoachPicker onSelect={openCoach} hasApiKey={!!apiKey} />;
@@ -595,6 +618,7 @@ export default function App() {
             onSavePlanFromMessage={savePlanFromMessage}
             onApplyWeekPlan={applyWeekPlan}
             onApplyMilestones={applyMilestones}
+            onApplyProfileUpdates={applyProfileUpdates}
             onClearChat={() => clearCoachChat(coach.id)}
           />
         </>
@@ -615,6 +639,7 @@ export default function App() {
           activeCoach={activeCoach}
           onSelectCoach={openCoach}
           showCoaches={desktopShowCoachList}
+          navItems={DESKTOP_NAV}
         />
         <main
           style={{

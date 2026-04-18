@@ -2,6 +2,7 @@ import { DAY_ORDER } from './storage.js';
 
 const WEEK_BLOCK_RE = /<<<\s*FORGE-WEEKPLAN\s*([\s\S]*?)>>>/i;
 const MILESTONE_BLOCK_RE = /<<<\s*FORGE-MILESTONES\s*([\s\S]*?)>>>/i;
+const PROFILE_BLOCK_RE = /<<<\s*FORGE-PROFILE\s*([\s\S]*?)>>>/i;
 
 export function hasWeekBlock(text) {
   return typeof text === 'string' && WEEK_BLOCK_RE.test(text);
@@ -9,6 +10,44 @@ export function hasWeekBlock(text) {
 
 export function hasMilestonesBlock(text) {
   return typeof text === 'string' && MILESTONE_BLOCK_RE.test(text);
+}
+
+export function hasProfileBlock(text) {
+  return typeof text === 'string' && PROFILE_BLOCK_RE.test(text);
+}
+
+const PROFILE_KEYS = new Set([
+  'name', 'age', 'sex', 'weightKg', 'heightCm',
+  'racingHistory', 'targetRaceName', 'targetRaceDate', 'targetRaceLocation', 'targetFinishTime',
+  'swim100mPace', 'weeklySwimVolumeKm', 'ftpWatts', 'hasPowerMeter', 'weeklyBikeHours',
+  'marathonPb', 'halfMarathonPb', 'weeklyRunKm',
+  'accessPool', 'accessOpenWater', 'accessTurbo', 'accessOutdoorBike', 'accessGym', 'accessTrails',
+  'typicalWeeklyHours', 'bestTrainingDays', 'busyTrainingDays', 'earlyOrLate',
+  'workCommitments', 'familyCommitments', 'travelCommitments',
+  'currentInjuries', 'injuryHistory',
+  'dietaryRestrictions', 'caffeineSensitive', 'giHistory',
+  'equipmentBike', 'equipmentWatch', 'equipmentHRM', 'otherEquipment',
+  'notes',
+]);
+
+export function parseProfileBlock(text) {
+  if (!text) return null;
+  const match = text.match(PROFILE_BLOCK_RE);
+  if (!match) return null;
+  const body = match[1];
+  const lines = body.split('\n').map((l) => l.trim()).filter(Boolean);
+  const updates = {};
+  for (const line of lines) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) continue;
+    const rawKey = line.slice(0, colonIdx).trim();
+    const key = rawKey.replace(/^[-*•]\s*/, '');
+    const value = line.slice(colonIdx + 1).trim();
+    if (PROFILE_KEYS.has(key)) {
+      updates[key] = value;
+    }
+  }
+  return Object.keys(updates).length ? updates : null;
 }
 
 export function parseWeekBlock(text) {
@@ -84,6 +123,7 @@ export function stripForgeBlocks(text) {
   return text
     .replace(WEEK_BLOCK_RE, '')
     .replace(MILESTONE_BLOCK_RE, '')
+    .replace(PROFILE_BLOCK_RE, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
