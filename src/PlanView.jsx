@@ -17,6 +17,7 @@ export default function PlanView({
   weekPlan,
   onWeekPlanChange,
   onAskFelix,
+  onAskKira,
 }) {
   const [draftPlan, setDraftPlan] = useState(planText || '');
   const [draftWeek, setDraftWeek] = useState(weekPlan);
@@ -52,6 +53,24 @@ export default function PlanView({
       />
       <ViewBody>
         <Section title="This week">
+          <div
+            style={{
+              display: 'flex',
+              gap: 10,
+              marginBottom: 14,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
+          >
+            {onAskKira && (
+              <GoldButton onClick={() => onAskKira()}>
+                PLAN THIS WEEK WITH KIRA →
+              </GoldButton>
+            )}
+            <span style={{ color: 'var(--text-dim)', fontSize: 13, fontStyle: 'italic' }}>
+              Kira reads your profile, master plan and last 10 log entries.
+            </span>
+          </div>
           <Field label="Week starting (YYYY-MM-DD)">
             <TextInput
               type="date"

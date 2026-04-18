@@ -2,6 +2,14 @@ import { DAY_ORDER, dayLabel, daysUntil, todayKey } from './storage.js';
 import { Section, GoldButton, GhostButton, ViewHeader, ViewBody } from './ui.jsx';
 import { COACHES, COACH_ORDER } from './coaches.js';
 
+function hasMasterPlan(planText) {
+  return !!(planText && planText.trim().length > 40);
+}
+
+function hasWeekSet(weekPlan) {
+  return DAY_ORDER.some((d) => weekPlan?.[d]?.trim());
+}
+
 function summariseLog(log) {
   if (!log.length) return null;
   const last7 = log.filter((e) => {
@@ -21,6 +29,7 @@ function summariseLog(log) {
 
 export default function HomeView({
   profile,
+  planText,
   weekPlan,
   log,
   onGoTo,
@@ -130,17 +139,33 @@ export default function HomeView({
           </Section>
         )}
 
-        {profileFilled && !weekPlan[today] && !weekPlan[DAY_ORDER[(todayIdx + 1) % 7]] && (
-          <Section title="Next step">
+        {profileFilled && !hasMasterPlan(planText) && (
+          <Section title="Next step — the long view">
             <div style={{ color: 'var(--text-mid)', marginBottom: 14, fontSize: 15 }}>
-              Your profile's in. Now let Felix (race planner) draft the long-view plan, and use Declan /
-              Amara / Marina to fill in this week's sessions.
+              Your profile's in. Now ask Felix to draft your master plan — the 104-week periodised
+              document that every other coach reads.
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <GoldButton onClick={() => onOpenCoach('racePlanning')}>
                 TALK TO FELIX →
               </GoldButton>
               <GhostButton onClick={() => onGoTo('plan')}>OPEN PLAN EDITOR</GhostButton>
+            </div>
+          </Section>
+        )}
+
+        {profileFilled && hasMasterPlan(planText) && !hasWeekSet(weekPlan) && (
+          <Section title="Next step — this week">
+            <div style={{ color: 'var(--text-mid)', marginBottom: 14, fontSize: 15 }}>
+              Master plan is saved. Now ask <strong style={{ color: 'var(--gold)' }}>Kira (Head Coach)</strong> to
+              turn it into your actual Mon–Sun sessions — reading your fitness, your last 10 log entries
+              and whatever is happening in your life this week.
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <GoldButton onClick={() => onOpenCoach('headCoach')}>
+                TALK TO KIRA →
+              </GoldButton>
+              <GhostButton onClick={() => onGoTo('plan')}>EDIT WEEK MANUALLY</GhostButton>
             </div>
           </Section>
         )}

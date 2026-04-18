@@ -90,6 +90,7 @@ export const defaultWeekPlan = {
 };
 
 export const defaultVoiceNotes = {
+  headCoach: '',
   swimming: '',
   cycling: '',
   running: '',

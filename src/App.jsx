@@ -459,6 +459,7 @@ export default function App() {
     body = (
       <HomeView
         profile={profile}
+        planText={planText}
         weekPlan={weekPlan}
         log={log}
         hasApiKey={!!apiKey}
@@ -474,6 +475,7 @@ export default function App() {
         weekPlan={weekPlan}
         onWeekPlanChange={setWeekPlan}
         onAskFelix={() => openCoach('racePlanning')}
+        onAskKira={() => openCoach('headCoach')}
       />
     );
   } else if (view === 'log') {
