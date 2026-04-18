@@ -109,8 +109,16 @@ function profileBlock(profile) {
 
 function weekPlanBlock(weekPlan) {
   if (!weekPlan) return '';
+  const feedback = weekPlan.feedback || {};
   const dayLines = DAY_ORDER
-    .map((d) => (weekPlan[d] ? `- ${dayLabel(d)}: ${weekPlan[d]}` : null))
+    .map((d) => {
+      const session = weekPlan[d];
+      const fb = feedback[d];
+      if (!session && !fb) return null;
+      let line = `- **${dayLabel(d)}:** ${session || '(nothing planned)'}`;
+      if (fb && fb.trim()) line += `\n  · feedback: ${fb.trim()}`;
+      return line;
+    })
     .filter(Boolean);
   if (dayLines.length === 0 && !weekPlan.weekFocus) return '';
   const headerBits = [];

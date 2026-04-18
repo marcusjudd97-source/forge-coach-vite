@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { storage, DAY_ORDER, dayLabel } from './storage.js';
 import {
   Section,
@@ -34,6 +34,14 @@ export default function PlanView({
 
   function updateDay(d, v) {
     setDraftWeek((w) => ({ ...w, [d]: v }));
+    setSaved(false);
+  }
+
+  function updateFeedback(d, v) {
+    setDraftWeek((w) => ({
+      ...w,
+      feedback: { ...(w.feedback || {}), [d]: v },
+    }));
     setSaved(false);
   }
 
@@ -88,25 +96,39 @@ export default function PlanView({
           </Field>
           <div style={{ height: 14 }} />
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '100px 1fr',
-              gap: 10,
-            }}
-          >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {DAY_ORDER.map((d) => (
-              <Fragment key={d}>
+              <div
+                key={d}
+                style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: 12,
+                  padding: 12,
+                  background: 'var(--bg3)',
+                }}
+              >
                 <div
                   style={{
                     fontFamily: 'var(--font-display)',
-                    fontSize: 14,
-                    letterSpacing: '0.18em',
-                    color: 'var(--text-mid)',
-                    paddingTop: 10,
+                    fontSize: 13,
+                    letterSpacing: '0.22em',
+                    color: 'var(--gold)',
+                    marginBottom: 8,
                   }}
                 >
                   {dayLabel(d).toUpperCase()}
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    letterSpacing: '0.14em',
+                    fontFamily: 'var(--font-display)',
+                    color: 'var(--text-dim)',
+                    textTransform: 'uppercase',
+                    marginBottom: 4,
+                  }}
+                >
+                  Session
                 </div>
                 <TextArea
                   rows={2}
@@ -114,7 +136,25 @@ export default function PlanView({
                   onChange={(v) => updateDay(d, v)}
                   placeholder="Swim 3km — 5×400 @ CSS"
                 />
-              </Fragment>
+                <div
+                  style={{
+                    fontSize: 11,
+                    letterSpacing: '0.14em',
+                    fontFamily: 'var(--font-display)',
+                    color: 'var(--text-dim)',
+                    textTransform: 'uppercase',
+                    margin: '10px 0 4px',
+                  }}
+                >
+                  How it went (feedback — Kira reads this)
+                </div>
+                <TextArea
+                  rows={2}
+                  value={draftWeek.feedback?.[d] || ''}
+                  onChange={(v) => updateFeedback(d, v)}
+                  placeholder="e.g. Felt flat in the warmup, dialled it in by the main set. RPE 7."
+                />
+              </div>
             ))}
           </div>
         </Section>

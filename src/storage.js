@@ -85,6 +85,15 @@ export const defaultWeekPlan = {
   fri: '',
   sat: '',
   sun: '',
+  feedback: {
+    mon: '',
+    tue: '',
+    wed: '',
+    thu: '',
+    fri: '',
+    sat: '',
+    sun: '',
+  },
   weekStarts: '',
   weekFocus: '',
 };
@@ -147,7 +156,12 @@ export const storage = {
   },
 
   getWeekPlan() {
-    return { ...defaultWeekPlan, ...safeGet(KEYS.weekPlan, {}) };
+    const stored = safeGet(KEYS.weekPlan, {}) || {};
+    return {
+      ...defaultWeekPlan,
+      ...stored,
+      feedback: { ...defaultWeekPlan.feedback, ...(stored.feedback || {}) },
+    };
   },
   setWeekPlan(w) {
     safeSet(KEYS.weekPlan, w);

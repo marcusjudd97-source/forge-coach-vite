@@ -58,6 +58,69 @@ export default function HomeView({
         subtitle="Today's focus, your coaches, and your history in one place."
       />
       <ViewBody>
+        {profileFilled && (
+          <Section>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 14,
+                flexWrap: 'wrap',
+              }}
+            >
+              <div
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: '50%',
+                  background: COACHES.headCoach.accentDim,
+                  border: `1px solid ${COACHES.headCoach.accentBorder}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 26,
+                  flexShrink: 0,
+                }}
+              >
+                {COACHES.headCoach.emoji}
+              </div>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 13,
+                    letterSpacing: '0.22em',
+                    color: COACHES.headCoach.accentColor,
+                  }}
+                >
+                  DAILY CHECK-IN
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 22,
+                    color: 'var(--text)',
+                    marginTop: 4,
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  TALK TO KIRA
+                </div>
+                <div
+                  style={{
+                    color: 'var(--text-mid)',
+                    fontSize: 14,
+                    marginTop: 4,
+                    fontStyle: 'italic',
+                  }}
+                >
+                  Morning energy, yesterday's session, anything on your mind. She's read everything.
+                </div>
+              </div>
+              <GoldButton onClick={() => onOpenCoach('headCoach')}>OPEN KIRA →</GoldButton>
+            </div>
+          </Section>
+        )}
         {race && days != null && days >= 0 && (
           <Section>
             <div
