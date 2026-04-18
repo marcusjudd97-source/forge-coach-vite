@@ -164,17 +164,42 @@ function countdownBlock(profile) {
   return `## Race Countdown\n- **${d} days** until ${profile.targetRaceName || 'target race'}.`;
 }
 
+function dateBlock() {
+  const now = new Date();
+  const iso = now.toISOString().slice(0, 10);
+  const weekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
+  const mondayOffset = (1 - now.getDay() + 7) % 7 || 7;
+  const nextMonday = new Date(now);
+  nextMonday.setDate(now.getDate() + mondayOffset);
+  const nextMondayIso = nextMonday.toISOString().slice(0, 10);
+  return `## Today\n- Today is **${weekday}, ${iso}**.\n- The next Monday is **${nextMondayIso}** — use this for weekStarts when writing a weekly plan.`;
+}
+
+function milestonesBlock(milestones) {
+  if (!Array.isArray(milestones) || milestones.length === 0) return '';
+  const sorted = [...milestones].sort((a, b) => (a.targetDate || '').localeCompare(b.targetDate || ''));
+  const lines = sorted.slice(0, 20).map((m) => {
+    const status = m.done ? '✅' : '⏳';
+    const parts = [status, m.targetDate || '—', m.title || '(untitled)'];
+    if (m.notes) parts.push(`— ${m.notes}`);
+    return `- ${parts.join(' · ')}`;
+  });
+  return `## Milestones\n${lines.join('\n')}`;
+}
+
 function voiceBlock(voiceNote) {
   if (!voiceNote || !voiceNote.trim()) return '';
   return `## Athlete's Voice Preferences for You\nThe athlete has specifically asked you to coach them in the following way. Honour it unless it conflicts with their safety:\n\n"${voiceNote.trim()}"`;
 }
 
-export function buildAthleteContext({ profile, planText, weekPlan, log, voiceNote }) {
+export function buildAthleteContext({ profile, planText, weekPlan, log, voiceNote, milestones }) {
   const blocks = [
+    dateBlock(),
     countdownBlock(profile),
     profileBlock(profile),
     planTextBlock(planText),
     weekPlanBlock(weekPlan),
+    milestonesBlock(milestones),
     logBlock(log),
     voiceBlock(voiceNote),
   ].filter(Boolean);

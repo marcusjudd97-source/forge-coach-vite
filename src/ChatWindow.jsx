@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { buildAthleteContext, buildSystemPrompt } from './context.js';
+import {
+  hasWeekBlock,
+  hasMilestonesBlock,
+  parseWeekBlock,
+  parseMilestonesBlock,
+  stripForgeBlocks,
+} from './parsers.js';
 
 function formatMessage(text, accentColor) {
   if (!text) return [];
@@ -105,7 +112,10 @@ export default function ChatWindow({
   weekPlan,
   log,
   voiceNote,
+  milestones,
   onSavePlanFromMessage,
+  onApplyWeekPlan,
+  onApplyMilestones,
   onClearChat,
 }) {
   const [input, setInput] = useState('');
@@ -136,6 +146,7 @@ export default function ChatWindow({
       weekPlan,
       log,
       voiceNote,
+      milestones,
     });
     return buildSystemPrompt(coach.systemPrompt, ctx);
   }
@@ -350,8 +361,13 @@ export default function ChatWindow({
 
   // Chat state
   const lastAssistant = [...(messages || [])].reverse().find((m) => m.role === 'assistant');
+  const lastAssistantContent = lastAssistant?.content || '';
   const showSavePlanBtn =
-    isFelix && lastAssistant && lastAssistant.content && lastAssistant.content.length > 200;
+    (isFelix || coach.id === 'headCoach') &&
+    lastAssistantContent &&
+    lastAssistantContent.length > 200;
+  const showApplyWeekBtn = hasWeekBlock(lastAssistantContent);
+  const showApplyMilestonesBtn = hasMilestonesBlock(lastAssistantContent);
 
   return (
     <div
@@ -362,7 +378,7 @@ export default function ChatWindow({
         flexDirection: 'column',
       }}
     >
-      {(showSavePlanBtn || messages.length > 0) && (
+      {(showSavePlanBtn || showApplyWeekBtn || showApplyMilestonesBtn || messages.length > 0) && (
         <div
           style={{
             display: 'flex',
@@ -375,13 +391,55 @@ export default function ChatWindow({
             flexWrap: 'wrap',
           }}
         >
-          {showSavePlanBtn && (
+          {showApplyWeekBtn && onApplyWeekPlan && (
             <button
-              onClick={() => onSavePlanFromMessage(lastAssistant.content)}
+              onClick={() => {
+                const parsed = parseWeekBlock(lastAssistantContent);
+                if (parsed) onApplyWeekPlan(parsed);
+              }}
               style={{
                 padding: '6px 12px',
                 borderRadius: 8,
                 background: coach.accentDim,
+                border: `1px solid ${coach.accentBorder}`,
+                color: coach.accentColor,
+                fontFamily: 'var(--font-display)',
+                fontSize: 11,
+                letterSpacing: '0.18em',
+                cursor: 'pointer',
+              }}
+            >
+              APPLY TO MY PLAN
+            </button>
+          )}
+          {showApplyMilestonesBtn && onApplyMilestones && (
+            <button
+              onClick={() => {
+                const parsed = parseMilestonesBlock(lastAssistantContent);
+                if (parsed && parsed.length) onApplyMilestones(parsed);
+              }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                background: coach.accentDim,
+                border: `1px solid ${coach.accentBorder}`,
+                color: coach.accentColor,
+                fontFamily: 'var(--font-display)',
+                fontSize: 11,
+                letterSpacing: '0.18em',
+                cursor: 'pointer',
+              }}
+            >
+              APPLY MILESTONES
+            </button>
+          )}
+          {showSavePlanBtn && (
+            <button
+              onClick={() => onSavePlanFromMessage(stripForgeBlocks(lastAssistantContent))}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                background: 'transparent',
                 border: `1px solid ${coach.accentBorder}`,
                 color: coach.accentColor,
                 fontFamily: 'var(--font-display)',
@@ -502,7 +560,7 @@ export default function ChatWindow({
                     wordBreak: 'break-word',
                   }}
                 >
-                  {formatMessage(m.content, accent)}
+                  {formatMessage(stripForgeBlocks(m.content), accent)}
                 </div>
               </div>
             );

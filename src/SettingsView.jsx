@@ -56,13 +56,14 @@ export default function SettingsView({
   function exportData() {
     const dump = {
       exportedAt: new Date().toISOString(),
-      version: 1,
+      version: 2,
       profile: storage.getProfile(),
       planText: storage.getPlanText(),
       weekPlan: storage.getWeekPlan(),
       log: storage.getLog(),
       voiceNotes: storage.getVoiceNotes(),
       chats: storage.getChats(),
+      milestones: storage.getMilestones(),
     };
     const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -98,6 +99,7 @@ export default function SettingsView({
       if (data.log) storage.setLog(data.log);
       if (data.voiceNotes) storage.setVoiceNotes(data.voiceNotes);
       if (data.chats) storage.setChats(data.chats);
+      if (data.milestones) storage.setMilestones(data.milestones);
       onDataImported?.();
       setImportMsg(`Imported backup from ${data.exportedAt || 'unknown date'}.`);
     } catch (err) {

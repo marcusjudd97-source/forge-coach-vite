@@ -6,6 +6,7 @@ const KEYS = {
   log: 'forge_log',
   voiceNotes: 'forge_voice_notes',
   chats: 'forge_chats',
+  milestones: 'forge_milestones',
 };
 
 function safeGet(key, fallback) {
@@ -188,6 +189,14 @@ export const storage = {
   },
   setChats(c) {
     safeSet(KEYS.chats, c);
+  },
+
+  getMilestones() {
+    const m = safeGet(KEYS.milestones, []);
+    return Array.isArray(m) ? m : [];
+  },
+  setMilestones(m) {
+    safeSet(KEYS.milestones, m);
   },
 
   resetAll() {

@@ -335,6 +335,7 @@ export default function App() {
   const [log, setLog] = useState(() => storage.getLog());
   const [voiceNotes, setVoiceNotes] = useState(() => storage.getVoiceNotes());
   const [chats, setChats] = useState(() => storage.getChats());
+  const [milestones, setMilestones] = useState(() => storage.getMilestones());
 
   const [view, setView] = useState('home');
   const [activeCoach, setActiveCoach] = useState('');
@@ -374,6 +375,7 @@ export default function App() {
     setLog(storage.getLog());
     setVoiceNotes(storage.getVoiceNotes());
     setChats(storage.getChats());
+    setMilestones(storage.getMilestones());
     setView('home');
     setActiveCoach('');
   }
@@ -385,6 +387,33 @@ export default function App() {
     setLog(storage.getLog());
     setVoiceNotes(storage.getVoiceNotes());
     setChats(storage.getChats());
+    setMilestones(storage.getMilestones());
+  }
+
+  function applyWeekPlan(parsed) {
+    const next = {
+      ...weekPlan,
+      weekStarts: parsed.weekStarts || weekPlan.weekStarts,
+      weekFocus: parsed.weekFocus || weekPlan.weekFocus,
+      mon: parsed.mon || '',
+      tue: parsed.tue || '',
+      wed: parsed.wed || '',
+      thu: parsed.thu || '',
+      fri: parsed.fri || '',
+      sat: parsed.sat || '',
+      sun: parsed.sun || '',
+    };
+    storage.setWeekPlan(next);
+    setWeekPlan(next);
+    window.alert("Applied — your Plan tab now shows Kira's week.");
+  }
+
+  function applyMilestones(parsed) {
+    const existing = storage.getMilestones();
+    const next = [...existing, ...parsed];
+    storage.setMilestones(next);
+    setMilestones(next);
+    window.alert(`Added ${parsed.length} milestones. See Plan → Milestones.`);
   }
 
   function openCoach(id) {
@@ -474,6 +503,8 @@ export default function App() {
         onPlanTextChange={setPlanText}
         weekPlan={weekPlan}
         onWeekPlanChange={setWeekPlan}
+        milestones={milestones}
+        onMilestonesChange={setMilestones}
         onAskFelix={() => openCoach('racePlanning')}
         onAskKira={() => openCoach('headCoach')}
       />
@@ -560,7 +591,10 @@ export default function App() {
             weekPlan={weekPlan}
             log={log}
             voiceNote={voiceNotes[coach.id]}
+            milestones={milestones}
             onSavePlanFromMessage={savePlanFromMessage}
+            onApplyWeekPlan={applyWeekPlan}
+            onApplyMilestones={applyMilestones}
             onClearChat={() => clearCoachChat(coach.id)}
           />
         </>
