@@ -111,7 +111,7 @@ export default function ChatWindow({
   onMessagesChange,
   profile,
   planText,
-  weekPlan,
+  schedule,
   log,
   voiceNote,
   milestones,
@@ -159,7 +159,7 @@ export default function ChatWindow({
     const ctx = buildAthleteContext({
       profile,
       planText,
-      weekPlan,
+      schedule,
       log,
       voiceNote,
       milestones,

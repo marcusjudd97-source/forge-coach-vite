@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { storage, DAY_ORDER, dayLabel, todayKey, daysUntil } from './storage.js';
+import {
+  storage,
+  todayIso,
+  addDays,
+  formatPretty,
+  dayOfWeekKey,
+  dayLabel,
+  daysUntil,
+} from './storage.js';
 import {
   Section,
   Field,
@@ -11,6 +19,8 @@ import {
   ViewBody,
 } from './ui.jsx';
 import QuickLog from './QuickLog.jsx';
+
+const HORIZON_DAYS = 14;
 
 function makeMilestoneId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -25,17 +35,6 @@ function inferDiscipline(text) {
   if (/\b(strength|gym|lift|weights|squat|deadlift|mobility|core)/.test(t)) return 'strength';
   if (/\brest\b/.test(t)) return 'rest';
   return 'other';
-}
-
-function dateForDay(weekStarts, dayKey) {
-  if (!weekStarts) return '';
-  const base = new Date(weekStarts + 'T00:00:00');
-  if (Number.isNaN(base.getTime())) return '';
-  const idx = DAY_ORDER.indexOf(dayKey);
-  if (idx < 0) return '';
-  const d = new Date(base);
-  d.setDate(base.getDate() + idx);
-  return d.toISOString().slice(0, 10);
 }
 
 function entryForDate(log, date) {
@@ -53,8 +52,8 @@ function statusPill(status) {
 export default function PlanView({
   planText,
   onPlanTextChange,
-  weekPlan,
-  onWeekPlanChange,
+  schedule,
+  onScheduleChange,
   log,
   onLogChange,
   milestones,
@@ -66,31 +65,34 @@ export default function PlanView({
   const [masterSaved, setMasterSaved] = useState(false);
   const [showMaster, setShowMaster] = useState(false);
   const [showMilestones, setShowMilestones] = useState(false);
-  const [editingDay, setEditingDay] = useState(null);
+  const [editingDate, setEditingDate] = useState(null);
   const [editingText, setEditingText] = useState('');
   const [quickLog, setQuickLog] = useState(null);
   const [newMilestone, setNewMilestone] = useState({ targetDate: '', title: '', notes: '' });
 
-  const today = todayKey();
+  const today = todayIso();
 
-  function updateWeek(partial) {
-    const next = { ...weekPlan, ...partial };
-    storage.setWeekPlan(next);
-    onWeekPlanChange(next);
+  function updateSession(date, session) {
+    const existing = schedule?.[date] || {};
+    const next = { ...schedule, [date]: { ...existing, session } };
+    storage.setSchedule(next);
+    onScheduleChange(next);
   }
 
-  function updateFeedback(d, v) {
-    const nextFeedback = { ...(weekPlan.feedback || {}), [d]: v };
-    updateWeek({ feedback: nextFeedback });
+  function updateFeedback(date, feedback) {
+    const existing = schedule?.[date] || {};
+    const next = { ...schedule, [date]: { ...existing, feedback } };
+    storage.setSchedule(next);
+    onScheduleChange(next);
   }
 
-  function startEdit(d) {
-    setEditingDay(d);
-    setEditingText(weekPlan[d] || '');
+  function startEdit(date) {
+    setEditingDate(date);
+    setEditingText(schedule?.[date]?.session || '');
   }
   function commitEdit() {
-    if (editingDay) updateWeek({ [editingDay]: editingText });
-    setEditingDay(null);
+    if (editingDate) updateSession(editingDate, editingText);
+    setEditingDate(null);
     setEditingText('');
   }
 
@@ -107,12 +109,11 @@ export default function PlanView({
     onPlanTextChange('');
   }
 
-  function openQuickLog(dayKey) {
-    const dateStr = dateForDay(weekPlan.weekStarts, dayKey) || new Date().toISOString().slice(0, 10);
-    const session = weekPlan[dayKey] || '';
+  function openQuickLog(date) {
+    const session = schedule?.[date]?.session || '';
     const discipline = inferDiscipline(session);
-    const prev = entryForDate(log, dateStr);
-    setQuickLog({ dayKey, dateString: dateStr, session, discipline, prevEntry: prev });
+    const prev = entryForDate(log, date);
+    setQuickLog({ date, session, discipline, prevEntry: prev });
   }
 
   function saveQuickLog(data) {
@@ -131,22 +132,20 @@ export default function PlanView({
       notes: data.notes,
     };
     const existing = (log || []).filter((e) => e.id !== id);
-    const next = [...existing, entry].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-    storage.setLog(next);
-    onLogChange(next);
+    const nextLog = [...existing, entry].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    storage.setLog(nextLog);
+    onLogChange(nextLog);
 
-    if (quickLog?.dayKey) {
-      const shortFeedback = [
-        data.status && data.status !== 'done' ? `[${data.status}]` : '',
-        data.rpe ? `RPE ${data.rpe}` : '',
-        data.avgHr ? `HR ${data.avgHr}` : '',
-        data.durationMin ? `${data.durationMin}min` : '',
-        data.notes,
-      ]
-        .filter(Boolean)
-        .join(' · ');
-      updateFeedback(quickLog.dayKey, shortFeedback);
-    }
+    const shortFeedback = [
+      data.status && data.status !== 'done' ? `[${data.status}]` : '',
+      data.rpe ? `RPE ${data.rpe}` : '',
+      data.avgHr ? `HR ${data.avgHr}` : '',
+      data.durationMin ? `${data.durationMin}min` : '',
+      data.notes,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    updateFeedback(data.date, shortFeedback);
 
     setQuickLog(null);
   }
@@ -179,14 +178,23 @@ export default function PlanView({
     saveMilestones((milestones || []).filter((m) => m.id !== id));
   }
 
-  function DayCard({ dayKey, isHero }) {
-    const date = dateForDay(weekPlan.weekStarts, dayKey);
-    const session = weekPlan[dayKey] || '';
-    const feedback = weekPlan.feedback?.[dayKey] || '';
+  // Build rolling 14-day window from today
+  const dates = [];
+  for (let i = 0; i < HORIZON_DAYS; i++) dates.push(addDays(today, i));
+
+  function DayCard({ date, isHero }) {
+    const dow = dayOfWeekKey(date);
+    const session = schedule?.[date]?.session || '';
     const entry = entryForDate(log, date);
     const pill = entry ? statusPill(entry.status) : null;
-    const isToday = dayKey === today;
-    const daysOut = date ? daysUntil(date) : null;
+    const isToday = date === today;
+    const isTomorrow = date === addDays(today, 1);
+    const daysOut = daysUntil(date);
+
+    let label;
+    if (isToday) label = 'TODAY';
+    else if (isTomorrow) label = 'TOMORROW';
+    else label = dayLabel(dow).toUpperCase();
 
     return (
       <div
@@ -217,14 +225,12 @@ export default function PlanView({
                 color: isToday ? 'var(--gold)' : 'var(--text-mid)',
               }}
             >
-              {isToday ? 'TODAY' : dayLabel(dayKey).toUpperCase()}
+              {label}
             </span>
-            {date && (
-              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-                {date}
-                {daysOut != null && daysOut > 0 && daysOut <= 7 ? ` · in ${daysOut}d` : ''}
-              </span>
-            )}
+            <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+              {formatPretty(date)}
+              {!isToday && !isTomorrow && daysOut != null && daysOut > 0 ? ` · in ${daysOut}d` : ''}
+            </span>
           </div>
           {pill && (
             <span
@@ -243,7 +249,7 @@ export default function PlanView({
           )}
         </div>
 
-        {editingDay === dayKey ? (
+        {editingDate === date ? (
           <>
             <TextArea
               rows={3}
@@ -252,13 +258,13 @@ export default function PlanView({
               placeholder="e.g. Bike threshold 75 min"
             />
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <GhostButton onClick={() => setEditingDay(null)}>Cancel</GhostButton>
+              <GhostButton onClick={() => setEditingDate(null)}>Cancel</GhostButton>
               <GoldButton onClick={commitEdit}>Save</GoldButton>
             </div>
           </>
         ) : (
           <div
-            onClick={() => startEdit(dayKey)}
+            onClick={() => startEdit(date)}
             style={{
               color: session ? 'var(--text)' : 'var(--text-dim)',
               fontSize: isHero ? 17 : 15,
@@ -303,26 +309,25 @@ export default function PlanView({
         )}
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <GoldButton onClick={() => openQuickLog(dayKey)} style={isHero ? { fontSize: 14, padding: '14px 28px' } : undefined}>
+          <GoldButton onClick={() => openQuickLog(date)} style={isHero ? { fontSize: 14, padding: '14px 28px' } : undefined}>
             {entry ? 'EDIT LOG' : 'LOG THIS'}
           </GoldButton>
-          {!editingDay && session && (
-            <GhostButton onClick={() => startEdit(dayKey)}>Edit session</GhostButton>
+          {!editingDate && session && (
+            <GhostButton onClick={() => startEdit(date)}>Edit session</GhostButton>
           )}
         </div>
       </div>
     );
   }
 
+  const heroDate = today;
+  const restDates = dates.slice(1);
+
   return (
     <>
       <ViewHeader
         title="YOUR PLAN"
-        subtitle={
-          weekPlan.weekFocus
-            ? `This week — ${weekPlan.weekFocus}`
-            : 'Ask Kira to write your week; tap any day to log it.'
-        }
+        subtitle="The next 14 days. Tap any day to edit its session or log it."
         right={
           onAskKira ? (
             <GoldButton onClick={() => onAskKira()}>TALK TO KIRA</GoldButton>
@@ -330,24 +335,11 @@ export default function PlanView({
         }
       />
       <ViewBody>
-        {DAY_ORDER.includes(today) && weekPlan[today] && (
-          <DayCard dayKey={today} isHero />
-        )}
+        <DayCard date={heroDate} isHero />
 
-        <Section title="The week (Mon → Sun)">
-          <div
-            style={{
-              fontSize: 12,
-              color: 'var(--text-dim)',
-              marginBottom: 10,
-              fontStyle: 'italic',
-            }}
-          >
-            Week starts: {weekPlan.weekStarts || '—'} · Focus:{' '}
-            {weekPlan.weekFocus || '—'}
-          </div>
-          {DAY_ORDER.map((d) => (
-            <DayCard key={d} dayKey={d} />
+        <Section title="What's coming">
+          {restDates.map((d) => (
+            <DayCard key={d} date={d} />
           ))}
         </Section>
 
@@ -546,8 +538,16 @@ export default function PlanView({
 
       <QuickLog
         open={!!quickLog}
-        dayLabel={quickLog ? dayLabel(quickLog.dayKey) : ''}
-        dateString={quickLog?.dateString || ''}
+        dayLabel={
+          quickLog
+            ? quickLog.date === today
+              ? 'Today'
+              : quickLog.date === addDays(today, 1)
+                ? 'Tomorrow'
+                : formatPretty(quickLog.date)
+            : ''
+        }
+        dateString={quickLog?.date || ''}
         discipline={quickLog?.discipline || 'other'}
         sessionText={quickLog?.session || ''}
         prevEntry={quickLog?.prevEntry}

@@ -7,7 +7,7 @@ import ProfileView from './ProfileView.jsx';
 import LogView from './LogView.jsx';
 import SettingsView from './SettingsView.jsx';
 import { COACHES, COACH_ORDER } from './coaches.js';
-import { storage } from './storage.js';
+import { storage, addDays, DAY_ORDER } from './storage.js';
 
 const MOBILE_BREAKPOINT = 640;
 
@@ -338,7 +338,7 @@ export default function App() {
   const [apiKey, setApiKey] = useState(() => storage.getApiKey());
   const [profile, setProfile] = useState(() => storage.getProfile());
   const [planText, setPlanText] = useState(() => storage.getPlanText());
-  const [weekPlan, setWeekPlan] = useState(() => storage.getWeekPlan());
+  const [schedule, setSchedule] = useState(() => storage.getSchedule());
   const [log, setLog] = useState(() => storage.getLog());
   const [voiceNotes, setVoiceNotes] = useState(() => storage.getVoiceNotes());
   const [chats, setChats] = useState(() => storage.getChats());
@@ -378,7 +378,7 @@ export default function App() {
     storage.resetAll();
     setProfile(storage.getProfile());
     setPlanText(storage.getPlanText());
-    setWeekPlan(storage.getWeekPlan());
+    setSchedule(storage.getSchedule());
     setLog(storage.getLog());
     setVoiceNotes(storage.getVoiceNotes());
     setChats(storage.getChats());
@@ -390,7 +390,7 @@ export default function App() {
   function handleDataImported() {
     setProfile(storage.getProfile());
     setPlanText(storage.getPlanText());
-    setWeekPlan(storage.getWeekPlan());
+    setSchedule(storage.getSchedule());
     setLog(storage.getLog());
     setVoiceNotes(storage.getVoiceNotes());
     setChats(storage.getChats());
@@ -398,21 +398,26 @@ export default function App() {
   }
 
   function applyWeekPlan(parsed) {
-    const next = {
-      ...weekPlan,
-      weekStarts: parsed.weekStarts || weekPlan.weekStarts,
-      weekFocus: parsed.weekFocus || weekPlan.weekFocus,
-      mon: parsed.mon || '',
-      tue: parsed.tue || '',
-      wed: parsed.wed || '',
-      thu: parsed.thu || '',
-      fri: parsed.fri || '',
-      sat: parsed.sat || '',
-      sun: parsed.sun || '',
-    };
-    storage.setWeekPlan(next);
-    setWeekPlan(next);
-    window.alert("Applied — your Plan tab now shows Kira's week.");
+    const weekStarts = parsed.weekStarts || '';
+    if (!weekStarts) {
+      window.alert(
+        "Kira didn't include a valid week start date. Ask her to re-send with a weekStarts in the FORGE-WEEKPLAN block.",
+      );
+      return;
+    }
+    const next = { ...schedule };
+    DAY_ORDER.forEach((d, idx) => {
+      const session = (parsed[d] || '').trim();
+      if (!session) return;
+      const dateKey = addDays(weekStarts, idx);
+      const existing = next[dateKey] || {};
+      next[dateKey] = { ...existing, session };
+    });
+    storage.setSchedule(next);
+    setSchedule(next);
+    window.alert(
+      `Applied — your Plan tab now shows Kira's week of ${weekStarts}. Existing sessions on other dates are untouched.`,
+    );
   }
 
   function applyMilestones(parsed) {
@@ -504,7 +509,7 @@ export default function App() {
       <HomeView
         profile={profile}
         planText={planText}
-        weekPlan={weekPlan}
+        schedule={schedule}
         log={log}
         hasApiKey={!!apiKey}
         onGoTo={(v) => setView(v)}
@@ -516,8 +521,8 @@ export default function App() {
       <PlanView
         planText={planText}
         onPlanTextChange={setPlanText}
-        weekPlan={weekPlan}
-        onWeekPlanChange={setWeekPlan}
+        schedule={schedule}
+        onScheduleChange={setSchedule}
         log={log}
         onLogChange={setLog}
         milestones={milestones}
@@ -611,7 +616,7 @@ export default function App() {
             onMessagesChange={(m) => setCoachMessages(coach.id, m)}
             profile={profile}
             planText={planText}
-            weekPlan={weekPlan}
+            schedule={schedule}
             log={log}
             voiceNote={voiceNotes[coach.id]}
             milestones={milestones}

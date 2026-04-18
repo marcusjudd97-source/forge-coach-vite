@@ -1,4 +1,4 @@
-import { DAY_ORDER, dayLabel, daysUntil, todayKey } from './storage.js';
+import { daysUntil, todayIso, addDays, formatPretty } from './storage.js';
 import { Section, GoldButton, GhostButton, ViewHeader, ViewBody } from './ui.jsx';
 import { COACHES, COACH_ORDER } from './coaches.js';
 
@@ -6,8 +6,14 @@ function hasMasterPlan(planText) {
   return !!(planText && planText.trim().length > 40);
 }
 
-function hasWeekSet(weekPlan) {
-  return DAY_ORDER.some((d) => weekPlan?.[d]?.trim());
+function hasScheduleSet(schedule) {
+  if (!schedule) return false;
+  const today = todayIso();
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(today, i);
+    if (schedule[d]?.session?.trim()) return true;
+  }
+  return false;
 }
 
 function summariseLog(log) {
@@ -30,18 +36,17 @@ function summariseLog(log) {
 export default function HomeView({
   profile,
   planText,
-  weekPlan,
+  schedule,
   log,
   onGoTo,
   onOpenCoach,
   hasApiKey,
 }) {
-  const today = todayKey();
-  const todayIdx = DAY_ORDER.indexOf(today);
+  const today = todayIso();
   const next3 = [];
   for (let i = 0; i < 3; i++) {
-    const k = DAY_ORDER[(todayIdx + i) % 7];
-    next3.push({ key: k, text: weekPlan[k] || '' });
+    const d = addDays(today, i);
+    next3.push({ date: d, text: schedule?.[d]?.session || '' });
   }
   const race = profile?.targetRaceName;
   const raceDate = profile?.targetRaceDate;
@@ -218,7 +223,7 @@ export default function HomeView({
           </Section>
         )}
 
-        {profileFilled && hasMasterPlan(planText) && !hasWeekSet(weekPlan) && (
+        {profileFilled && hasMasterPlan(planText) && !hasScheduleSet(schedule) && (
           <Section title="Next step — this week">
             <div style={{ color: 'var(--text-mid)', marginBottom: 14, fontSize: 15 }}>
               Master plan is saved. Ask Kira to write this week's 7 sessions — she'll read your profile,
@@ -243,7 +248,7 @@ export default function HomeView({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {next3.map((d, idx) => (
                 <div
-                  key={d.key}
+                  key={d.date}
                   style={{
                     border: `1px solid ${idx === 0 ? 'rgba(200, 146, 42, 0.45)' : 'var(--border)'}`,
                     background: idx === 0 ? 'rgba(200, 146, 42, 0.08)' : 'var(--bg3)',
@@ -260,8 +265,7 @@ export default function HomeView({
                       marginBottom: 6,
                     }}
                   >
-                    {idx === 0 ? 'TODAY' : idx === 1 ? 'TOMORROW' : dayLabel(d.key).toUpperCase()} ·{' '}
-                    {dayLabel(d.key)}
+                    {idx === 0 ? 'TODAY' : idx === 1 ? 'TOMORROW' : formatPretty(d.date).toUpperCase()} · {formatPretty(d.date)}
                   </div>
                   <div
                     style={{
@@ -279,8 +283,7 @@ export default function HomeView({
             </div>
           )}
           <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-            <GhostButton onClick={() => onGoTo('plan')}>EDIT WEEK</GhostButton>
-            <GhostButton onClick={() => onGoTo('log')}>LOG A SESSION</GhostButton>
+            <GhostButton onClick={() => onGoTo('plan')}>OPEN PLAN</GhostButton>
           </div>
         </Section>
 

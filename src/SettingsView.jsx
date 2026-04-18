@@ -56,10 +56,10 @@ export default function SettingsView({
   function exportData() {
     const dump = {
       exportedAt: new Date().toISOString(),
-      version: 2,
+      version: 3,
       profile: storage.getProfile(),
       planText: storage.getPlanText(),
-      weekPlan: storage.getWeekPlan(),
+      schedule: storage.getSchedule(),
       log: storage.getLog(),
       voiceNotes: storage.getVoiceNotes(),
       chats: storage.getChats(),
@@ -95,6 +95,7 @@ export default function SettingsView({
       }
       if (data.profile) storage.setProfile(data.profile);
       if (data.planText !== undefined) storage.setPlanText(data.planText);
+      if (data.schedule) storage.setSchedule(data.schedule);
       if (data.weekPlan) storage.setWeekPlan(data.weekPlan);
       if (data.log) storage.setLog(data.log);
       if (data.voiceNotes) storage.setVoiceNotes(data.voiceNotes);

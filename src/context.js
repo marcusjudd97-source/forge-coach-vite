@@ -1,4 +1,4 @@
-import { DAY_ORDER, dayLabel, daysUntil } from './storage.js';
+import { DAY_ORDER, dayLabel, daysUntil, todayIso, addDays, formatPretty, isoDate } from './storage.js';
 
 function line(label, value) {
   if (value === undefined || value === null || value === '') return null;
@@ -107,25 +107,25 @@ function profileBlock(profile) {
   return `## Athlete Profile\n\n${filled.join('\n\n')}`;
 }
 
-function weekPlanBlock(weekPlan) {
-  if (!weekPlan) return '';
-  const feedback = weekPlan.feedback || {};
-  const dayLines = DAY_ORDER
-    .map((d) => {
-      const session = weekPlan[d];
-      const fb = feedback[d];
-      if (!session && !fb) return null;
-      let line = `- **${dayLabel(d)}:** ${session || '(nothing planned)'}`;
-      if (fb && fb.trim()) line += `\n  · feedback: ${fb.trim()}`;
-      return line;
-    })
-    .filter(Boolean);
-  if (dayLines.length === 0 && !weekPlan.weekFocus) return '';
-  const headerBits = [];
-  if (weekPlan.weekStarts) headerBits.push(`Week of ${weekPlan.weekStarts}`);
-  if (weekPlan.weekFocus) headerBits.push(`Focus: ${weekPlan.weekFocus}`);
-  const header = headerBits.length ? headerBits.join(' — ') + '\n' : '';
-  return `## This Week's Plan\n${header}${dayLines.join('\n')}`;
+function scheduleBlock(schedule) {
+  if (!schedule || typeof schedule !== 'object') return '';
+  const today = todayIso();
+  const lines = [];
+  for (let i = 0; i < 14; i++) {
+    const d = addDays(today, i);
+    const entry = schedule[d];
+    if (!entry || (!entry.session && !entry.feedback)) continue;
+    const dow = new Date(d + 'T00:00:00');
+    const label = formatPretty(d);
+    let line = `- **${label}** (${d}): ${entry.session || '(nothing planned)'}`;
+    if (entry.feedback && entry.feedback.trim()) {
+      line += `\n  · feedback: ${entry.feedback.trim()}`;
+    }
+    lines.push(line);
+    if (Number.isNaN(dow.getTime())) continue;
+  }
+  if (lines.length === 0) return '';
+  return `## Upcoming Sessions (next 14 days from today)\n${lines.join('\n')}`;
 }
 
 function planTextBlock(planText) {
@@ -166,20 +166,16 @@ function countdownBlock(profile) {
 
 function dateBlock() {
   const now = new Date();
-  const iso = now.toISOString().slice(0, 10);
+  const iso = isoDate(now);
   const dow = now.getDay(); // 0=Sun ... 6=Sat
   const weekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dow];
 
   // Monday of the current calendar week (most recent Monday, today if Monday)
   const currentMondayOffset = dow === 0 ? -6 : 1 - dow;
-  const currentMonday = new Date(now);
-  currentMonday.setDate(now.getDate() + currentMondayOffset);
-  const currentMondayIso = currentMonday.toISOString().slice(0, 10);
+  const currentMondayIso = addDays(iso, currentMondayOffset);
 
   // Monday of next week
-  const nextMonday = new Date(currentMonday);
-  nextMonday.setDate(currentMonday.getDate() + 7);
-  const nextMondayIso = nextMonday.toISOString().slice(0, 10);
+  const nextMondayIso = addDays(currentMondayIso, 7);
 
   // Default interpretation of "this week"
   // - If today is Mon/Tue/Wed/Thu: "this week" = the current week (from currentMonday)
@@ -216,13 +212,13 @@ function voiceBlock(voiceNote) {
   return `## Athlete's Voice Preferences for You\nThe athlete has specifically asked you to coach them in the following way. Honour it unless it conflicts with their safety:\n\n"${voiceNote.trim()}"`;
 }
 
-export function buildAthleteContext({ profile, planText, weekPlan, log, voiceNote, milestones }) {
+export function buildAthleteContext({ profile, planText, schedule, log, voiceNote, milestones }) {
   const blocks = [
     dateBlock(),
     countdownBlock(profile),
     profileBlock(profile),
     planTextBlock(planText),
-    weekPlanBlock(weekPlan),
+    scheduleBlock(schedule),
     milestonesBlock(milestones),
     logBlock(log),
     voiceBlock(voiceNote),
