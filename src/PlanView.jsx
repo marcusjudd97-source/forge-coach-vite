@@ -72,9 +72,6 @@ export default function PlanView({
   const [newMilestone, setNewMilestone] = useState({ targetDate: '', title: '', notes: '' });
 
   const today = todayKey();
-  const todayIdx = DAY_ORDER.indexOf(today);
-  const orderedDays = [];
-  for (let i = 0; i < 7; i++) orderedDays.push(DAY_ORDER[(todayIdx + i) % 7]);
 
   function updateWeek(partial) {
     const next = { ...weekPlan, ...partial };
@@ -333,25 +330,25 @@ export default function PlanView({
         }
       />
       <ViewBody>
-        <DayCard dayKey={today} isHero />
+        {DAY_ORDER.includes(today) && weekPlan[today] && (
+          <DayCard dayKey={today} isHero />
+        )}
 
-        <Section title="Rest of the week">
-          {orderedDays.slice(1).map((d) => (
-            <DayCard key={d} dayKey={d} />
-          ))}
+        <Section title="The week (Mon → Sun)">
           <div
             style={{
-              marginTop: 10,
-              padding: 10,
               fontSize: 12,
               color: 'var(--text-dim)',
-              textAlign: 'center',
+              marginBottom: 10,
               fontStyle: 'italic',
             }}
           >
             Week starts: {weekPlan.weekStarts || '—'} · Focus:{' '}
             {weekPlan.weekFocus || '—'}
           </div>
+          {DAY_ORDER.map((d) => (
+            <DayCard key={d} dayKey={d} />
+          ))}
         </Section>
 
         <Section>

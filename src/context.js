@@ -167,12 +167,36 @@ function countdownBlock(profile) {
 function dateBlock() {
   const now = new Date();
   const iso = now.toISOString().slice(0, 10);
-  const weekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][now.getDay()];
-  const mondayOffset = (1 - now.getDay() + 7) % 7 || 7;
-  const nextMonday = new Date(now);
-  nextMonday.setDate(now.getDate() + mondayOffset);
+  const dow = now.getDay(); // 0=Sun ... 6=Sat
+  const weekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dow];
+
+  // Monday of the current calendar week (most recent Monday, today if Monday)
+  const currentMondayOffset = dow === 0 ? -6 : 1 - dow;
+  const currentMonday = new Date(now);
+  currentMonday.setDate(now.getDate() + currentMondayOffset);
+  const currentMondayIso = currentMonday.toISOString().slice(0, 10);
+
+  // Monday of next week
+  const nextMonday = new Date(currentMonday);
+  nextMonday.setDate(currentMonday.getDate() + 7);
   const nextMondayIso = nextMonday.toISOString().slice(0, 10);
-  return `## Today\n- Today is **${weekday}, ${iso}**.\n- The next Monday is **${nextMondayIso}** — use this for weekStarts when writing a weekly plan.`;
+
+  // Default interpretation of "this week"
+  // - If today is Mon/Tue/Wed/Thu: "this week" = the current week (from currentMonday)
+  // - If today is Fri/Sat/Sun: "this week" usually means next week (you're planning forward)
+  const lateInWeek = dow === 0 || dow === 5 || dow === 6;
+  const defaultWeekStarts = lateInWeek ? nextMondayIso : currentMondayIso;
+  const guidance = lateInWeek
+    ? 'It is late in the week, so "this week" from the athlete typically means next week (the week starting on the next Monday). Confirm with them if ambiguous.'
+    : 'It is early/mid week, so "this week" from the athlete means the current calendar week (the one already in progress).';
+
+  return `## Today
+- Today is **${weekday}, ${iso}**.
+- **Current week's Monday:** ${currentMondayIso} (the week already in progress).
+- **Next week's Monday:** ${nextMondayIso}.
+- **Default \`weekStarts\` for "this week":** ${defaultWeekStarts}.
+- ${guidance}
+- When the athlete mentions "this week," "next week" or gives a specific date, use it. Otherwise default to ${defaultWeekStarts}.`;
 }
 
 function milestonesBlock(milestones) {
