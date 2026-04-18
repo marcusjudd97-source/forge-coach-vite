@@ -21,7 +21,25 @@ export default function SettingsView({
   const [draft, setDraft] = useState(voiceNotes);
   const [voiceSaved, setVoiceSaved] = useState(false);
   const [importMsg, setImportMsg] = useState('');
+  const [keyShown, setKeyShown] = useState(false);
+  const [keyCopied, setKeyCopied] = useState(false);
   const fileRef = useRef(null);
+
+  const currentKey = storage.getApiKey() || '';
+  const maskedKey = currentKey
+    ? `${currentKey.slice(0, 12)}${'•'.repeat(Math.max(0, currentKey.length - 16))}${currentKey.slice(-4)}`
+    : '';
+
+  async function copyKey() {
+    if (!currentKey) return;
+    try {
+      await navigator.clipboard.writeText(currentKey);
+      setKeyCopied(true);
+      setTimeout(() => setKeyCopied(false), 2200);
+    } catch {
+      window.prompt('Copy your key manually (Cmd/Ctrl+C):', currentKey);
+    }
+  }
 
   function updateVoice(id, v) {
     setDraft((d) => ({ ...d, [id]: v }));
@@ -183,8 +201,54 @@ export default function SettingsView({
 
         <Section title="API key">
           <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 14, lineHeight: 1.5 }}>
-            Stored only in this browser. Replace it if you rotated keys or switched Anthropic accounts.
+            Stored only in this browser. Copy it here to paste into another device (e.g. FORGE on
+            your phone). Anthropic only ever shows you the key once on their site — this is how you
+            retrieve it afterwards.
           </div>
+
+          {currentKey ? (
+            <>
+              <div
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  background: 'var(--bg3)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text)',
+                  fontFamily:
+                    'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                  fontSize: 13,
+                  letterSpacing: '0.02em',
+                  marginBottom: 12,
+                  wordBreak: 'break-all',
+                  userSelect: 'all',
+                }}
+              >
+                {keyShown ? currentKey : maskedKey}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                <GhostButton onClick={() => setKeyShown((s) => !s)}>
+                  {keyShown ? 'HIDE KEY' : 'SHOW KEY'}
+                </GhostButton>
+                <GoldButton onClick={copyKey}>{keyCopied ? 'COPIED ✓' : 'COPY KEY'}</GoldButton>
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: 'var(--text-dim)',
+                  fontStyle: 'italic',
+                  marginBottom: 14,
+                }}
+              >
+                ⚠️ Treat the key like a password. Never paste it into chat or public places.
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 14 }}>
+              No key stored in this browser yet.
+            </div>
+          )}
+
           <GhostButton onClick={onChangeApiKey}>CHANGE / REMOVE API KEY</GhostButton>
         </Section>
 
