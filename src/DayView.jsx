@@ -61,11 +61,24 @@ export function habitDone(habit, value) {
   return target > 0 ? n >= target : n > 0;
 }
 
+// Is this habit scheduled on this date? habit.days holds JS weekday numbers
+// (0 = Sunday … 6 = Saturday); absent/empty/full means every day.
+export function habitOnDay(habit, dateIso) {
+  const days = habit?.days;
+  if (!Array.isArray(days) || days.length === 0 || days.length >= 7) return true;
+  return days.includes(new Date(dateIso + 'T12:00:00').getDay());
+}
+
 export function habitStreak(habit, daily) {
   let d = todayIso();
-  if (!habitDone(habit, daily?.[d]?.habits?.[habit.id])) d = addDays(d, -1);
+  if (habitOnDay(habit, d) && !habitDone(habit, daily?.[d]?.habits?.[habit.id])) d = addDays(d, -1);
   let n = 0;
-  while (habitDone(habit, daily?.[d]?.habits?.[habit.id])) {
+  for (let guard = 0; guard < 3660; guard++) {
+    if (!habitOnDay(habit, d)) {
+      d = addDays(d, -1);
+      continue;
+    }
+    if (!habitDone(habit, daily?.[d]?.habits?.[habit.id])) break;
     n += 1;
     d = addDays(d, -1);
   }
@@ -181,8 +194,10 @@ function GratitudePanel({ values, onChange }) {
   );
 }
 
-function HabitList({ habits, when, sheet, daily, onValue }) {
-  const list = (habits || []).filter((h) => (h.when || 'any') === when || (h.when || 'any') === 'any');
+function HabitList({ habits, when, date, sheet, daily, onValue }) {
+  const list = (habits || []).filter(
+    (h) => ((h.when || 'any') === when || (h.when || 'any') === 'any') && habitOnDay(h, date)
+  );
   if (!list.length) return null;
   return (
     <div>
@@ -531,7 +546,7 @@ export default function DayView({
                 <TextArea rows={3} value={m.todos} onChange={(v) => update('morning', 'todos', v)} placeholder={'1.\n2.\n3.'} />
               </Field>
 
-              <HabitList habits={habits} when="morning" sheet={sheet} daily={daily} onValue={setHabitValue} />
+              <HabitList habits={habits} when="morning" date={date} sheet={sheet} daily={daily} onValue={setHabitValue} />
 
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
                 {onGoTo && (
@@ -601,7 +616,7 @@ export default function DayView({
                 label="Tomorrow planned / diary reviewed"
               />
 
-              <HabitList habits={habits} when="evening" sheet={sheet} daily={daily} onValue={setHabitValue} />
+              <HabitList habits={habits} when="evening" date={date} sheet={sheet} daily={daily} onValue={setHabitValue} />
 
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
                 {onGoTo && (

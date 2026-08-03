@@ -1,6 +1,6 @@
 import { todayIso, addDays } from './storage.js';
 import { Section } from './ui.jsx';
-import { morningDone, eveningDone, habitDone } from './DayView.jsx';
+import { morningDone, eveningDone, habitDone, habitOnDay } from './DayView.jsx';
 
 function Dots({ days, isDone }) {
   return (
@@ -60,10 +60,14 @@ export default function WeekReview({ daily, habits, schedule, log }) {
   const trained = planned.filter((d) => loggedDates.has(d));
   const unlogged = planned.filter((d) => !loggedDates.has(d) && d !== today);
 
-  const habitRows = (habits || []).map((h) => ({
-    habit: h,
-    done: days.filter((d) => habitDone(h, daily?.[d]?.habits?.[h.id])).length,
-  }));
+  const habitRows = (habits || []).map((h) => {
+    const scheduled = days.filter((d) => habitOnDay(h, d));
+    return {
+      habit: h,
+      scheduled,
+      done: scheduled.filter((d) => habitDone(h, daily?.[d]?.habits?.[h.id])).length,
+    };
+  });
 
   const nothingYet =
     mDone === 0 && eDone === 0 && planned.length === 0 && habitRows.every((r) => r.done === 0);
@@ -95,13 +99,13 @@ export default function WeekReview({ daily, habits, schedule, log }) {
         )}
         {habitRows.length > 0 && (
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'grid', gap: 8 }}>
-            {habitRows.map(({ habit, done }) => (
+            {habitRows.map(({ habit, scheduled, done }) => (
               <Row
                 key={habit.id}
                 label={`🔁 ${habit.name}`}
                 count={done}
-                total={7}
-                days={days}
+                total={scheduled.length}
+                days={scheduled}
                 isDone={(d) => habitDone(habit, daily?.[d]?.habits?.[habit.id])}
               />
             ))}

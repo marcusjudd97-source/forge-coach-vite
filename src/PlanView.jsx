@@ -20,6 +20,7 @@ import {
 } from './ui.jsx';
 import QuickLog from './QuickLog.jsx';
 import { outlookEventUrl, buildScheduleIcs, downloadIcs, upcomingSessionDates } from './calendar.js';
+import { getOutlookAccount, pushToOutlook } from './msgraph.js';
 
 const HORIZON_DAYS = 14;
 
@@ -338,7 +339,7 @@ export default function PlanView({
               ⇄ Swap
             </GhostButton>
           )}
-          {session && (
+          {session && !outlookConnected && (
             <GhostButton
               onClick={() => window.open(outlookEventUrl(date, session), '_blank', 'noopener')}
               style={{ color: 'var(--text-mid)' }}
@@ -431,8 +432,24 @@ export default function PlanView({
   const heroDate = today;
   const restDates = dates.slice(1);
   const upcomingCount = upcomingSessionDates(schedule).length;
+  const outlookConnected = !!getOutlookAccount();
+  const [pushState, setPushState] = useState(''); // '' | 'busy' | result text
 
-  function exportCalendar() {
+  async function exportCalendar() {
+    if (outlookConnected) {
+      setPushState('busy');
+      try {
+        const r = await pushToOutlook({
+          schedule,
+          calendarEvents: storage.getCalendarEvents(),
+        });
+        setPushState(`Outlook updated ✓ — ${r.created} added, ${r.updated} changed, ${r.removed} removed, straight into your real calendar.`);
+      } catch (err) {
+        setPushState(`Push failed: ${err.message || err}`);
+      }
+      setTimeout(() => setPushState(''), 6000);
+      return;
+    }
     const ics = buildScheduleIcs(schedule);
     downloadIcs(`forge-sessions-${today}.ics`, ics);
   }
@@ -451,10 +468,19 @@ export default function PlanView({
       <ViewBody>
         <DayCard date={heroDate} isHero />
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '2px 0 12px' }}>
-          <GhostButton onClick={exportCalendar} disabled={!upcomingCount}>
-            📅 ADD ALL TO CALENDAR{upcomingCount ? ` (${upcomingCount})` : ''}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, margin: '2px 0 12px' }}>
+          <GhostButton onClick={exportCalendar} disabled={!upcomingCount || pushState === 'busy'}>
+            {pushState === 'busy'
+              ? 'PUSHING TO OUTLOOK…'
+              : outlookConnected
+                ? `📅 PUSH TO OUTLOOK${upcomingCount ? ` (${upcomingCount})` : ''}`
+                : `📅 ADD ALL TO CALENDAR${upcomingCount ? ` (${upcomingCount})` : ''}`}
           </GhostButton>
+          {pushState && pushState !== 'busy' && (
+            <div style={{ fontSize: 13, color: pushState.startsWith('Push failed') ? '#e8a090' : '#a8cf8e' }}>
+              {pushState}
+            </div>
+          )}
         </div>
 
         <Section title="What's coming">
