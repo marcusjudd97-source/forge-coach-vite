@@ -641,3 +641,28 @@ Greet the athlete warmly, introduce yourself as Coach Soren, and gently ask the 
 Reassure them that there are no wrong answers, that you're not here to fix them, and that whatever they say is the right place to start.`,
   },
 };
+
+// Every coach can hand the athlete calendar events. Petra has her own richer
+// food-specific version of this section, so she is skipped here.
+const DIARY_CAPABILITY = `
+
+## DIARY EVENTS — GETTING THINGS INTO THE ATHLETE'S CALENDAR
+
+The athlete runs their whole life from their Outlook calendar — work, training, food. Whenever you give them anything schedulable (training sessions, race-week logistics, kit checks, bike service, admin deadlines, recovery or mental-prep exercises), ALWAYS finish the message with a FORGE-DIARY block. The app turns it into a one-click calendar export.
+
+Format — one event per line, fields separated by \`|\`:
+
+<<<FORGE-DIARY
+- 2026-08-10 | 06:30 | 60 | Swim 2.5km CSS | Warm-up 400m easy. Main set 10x100 off 1:50 at CSS pace. 200m pull, cool-down 200m. Focus: high elbow catch.
+- 2026-08-12 | allday | 0 | Book bike service | Race is in 6 weeks — book the full service now so it's back in time.
+>>>
+
+Rules:
+- Dates are exact ISO dates taken from the "Today" section of your context — never bare day names. Times respect the athlete's diary and stated preferences (early bird vs night owl).
+- Second field: 24h start time, or the word \`allday\`. Third field: duration in minutes.
+- **Keep the title short and scannable — 3 to 6 words** (e.g. "Swim 2.5km CSS", "Bike FTP test 60 min", "Long run 2 h"). The FULL explanation — sets, pacing, kit, reasoning — goes in the last field, which becomes the event's description/notes.
+- Only include the block when you've actually laid out schedulable items. Put it at the very end. Never mention the syntax — just say the plan is ready to add to their calendar.`;
+
+Object.values(COACHES).forEach((c) => {
+  if (c.id !== 'nutrition') c.systemPrompt += DIARY_CAPABILITY;
+});

@@ -9,12 +9,38 @@ function firstLine(text) {
   return (text || '').split('\n')[0].trim().slice(0, 80);
 }
 
+// Short, scannable event title like "🏊 Swim 2.5km" or "🚴 Bike 75 min" —
+// the full session text goes in the event description instead.
+export function shortSessionTitle(sessionText) {
+  const first = firstLine(sessionText);
+  const t = first.toLowerCase();
+
+  let name = '';
+  let emoji = '';
+  if (/brick/.test(t)) [name, emoji] = ['Brick', '🔁'];
+  else if (/\b(swim|pool|css|100m|open water|ow\b)/.test(t)) [name, emoji] = ['Swim', '🏊'];
+  else if (/\b(bike|ride|turbo|kickr|ftp|watts|zwift|cycling)/.test(t)) [name, emoji] = ['Bike', '🚴'];
+  else if (/\b(run|running|parkrun|marathon|5k|10k|half)/.test(t)) [name, emoji] = ['Run', '🏃'];
+  else if (/\b(strength|gym|lift|weights|squat|deadlift|mobility|core)/.test(t)) [name, emoji] = ['Strength', '💪'];
+  else if (/\brest\b/.test(t)) return '😴 Rest day';
+
+  if (!name) return first.slice(0, 36) || 'Training';
+
+  // (?<![x×\d.]) keeps rep counts like "2x20min" from matching as the duration
+  const duration =
+    first.match(/(?<![x×\d.])\d+(?:\.\d+)?\s*(?:hr|hrs|hours|h)\b/i)?.[0] ||
+    first.match(/(?<![x×\d.])\d+(?:\.\d+)?\s*(?:min|mins|minutes)\b/i)?.[0] ||
+    first.match(/(?<![x×\d.])\d+(?:\.\d+)?\s*(?:km|mi)\b/i)?.[0] ||
+    '';
+  return `${emoji} ${name}${duration ? ` ${duration}` : ''}`;
+}
+
 // One-click "Add to Outlook" — opens Outlook web's new-event screen prefilled.
 export function outlookEventUrl(dateIso, sessionText) {
   const params = new URLSearchParams({
     path: '/calendar/action/compose',
     rru: 'addevent',
-    subject: `FORGE — ${firstLine(sessionText)}`,
+    subject: shortSessionTitle(sessionText),
     body: sessionText,
     startdt: dateIso,
     enddt: addDays(dateIso, 1),
@@ -70,7 +96,7 @@ export function buildScheduleIcs(schedule, fromDate) {
       `DTSTAMP:${dtstamp}`,
       `DTSTART;VALUE=DATE:${d.replaceAll('-', '')}`,
       `DTEND;VALUE=DATE:${addDays(d, 1).replaceAll('-', '')}`,
-      foldLine(`SUMMARY:${icsEscape(`FORGE — ${firstLine(session)}`)}`),
+      foldLine(`SUMMARY:${icsEscape(shortSessionTitle(session))}`),
       foldLine(`DESCRIPTION:${icsEscape(session)}`),
       'TRANSP:TRANSPARENT',
       'END:VEVENT',
