@@ -8,6 +8,7 @@ import {
   fullSync,
   forceUpload,
   forceDownload,
+  restoreForceBackup,
   getClient,
 } from './sync.js';
 
@@ -201,6 +202,22 @@ export default function AccountSync() {
               >
                 ⬇ FORCE DOWNLOAD
               </GhostButton>
+              <GhostButton
+                disabled={status.state === 'syncing'}
+                onClick={() => {
+                  if (!window.confirm('Undo the last force upload/download by restoring the automatic cloud backup taken just before it?')) return;
+                  run(async () => {
+                    const r = await restoreForceBackup();
+                    return r;
+                  }, 'Backup restored — cloud and this device are back to the pre-force state.');
+                }}
+              >
+                ↩ UNDO LAST FORCE
+              </GhostButton>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic', marginTop: 8, lineHeight: 1.5 }}>
+              A cloud backup is taken automatically right before every force, so one wrong press is
+              always reversible with ↩.
             </div>
           </div>
         </>

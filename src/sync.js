@@ -160,6 +160,65 @@ export async function fullSync() {
   }
 }
 
+// One-shot cloud backup taken before any force operation, so a wrong-way
+// force can always be undone from Settings.
+const BACKUP_KEY = 'backup_pre_force';
+
+async function snapshotCloudToBackup(supa) {
+  const { data, error } = await supa.from(TABLE).select('key,value,updated_at');
+  if (error) throw error;
+  const rows = (data || []).filter((r) => r.key !== BACKUP_KEY);
+  await supa.from(TABLE).upsert(
+    {
+      user_id: status.user.id,
+      key: BACKUP_KEY,
+      value: { snapshotAt: new Date().toISOString(), rows },
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id,key' },
+  );
+}
+
+export async function getForceBackupInfo() {
+  const supa = getClient();
+  if (!supa || !status.user) return null;
+  const { data } = await supa.from(TABLE).select('value').eq('key', BACKUP_KEY).maybeSingle();
+  return data?.value?.snapshotAt || null;
+}
+
+// Put the cloud back exactly as it was before the last force operation,
+// then pull it down to this device.
+export async function restoreForceBackup() {
+  const supa = getClient();
+  if (!supa || !status.user) return { error: 'Not signed in.' };
+  setStatus({ state: 'syncing' });
+  try {
+    const { data, error } = await supa.from(TABLE).select('value').eq('key', BACKUP_KEY).maybeSingle();
+    if (error) throw error;
+    const rows = data?.value?.rows;
+    if (!Array.isArray(rows) || !rows.length) throw new Error('No backup found.');
+    await supa.from(TABLE).upsert(
+      rows.map((r) => ({
+        user_id: status.user.id,
+        key: r.key,
+        value: r.value,
+        updated_at: new Date().toISOString(), // newest → wins on every device
+      })),
+      { onConflict: 'user_id,key' },
+    );
+    // Apply to this device immediately
+    for (const r of rows) {
+      if (SYNC_STORAGE_KEYS.includes(r.key)) applyRemoteValue(r.key, r.value, Date.now());
+    }
+    setStatus({ state: 'synced', error: '', lastSyncAt: Date.now() });
+    if (onRemoteApplied) onRemoteApplied();
+    return { restoredAt: data.value.snapshotAt };
+  } catch (err) {
+    setStatus({ state: 'error', error: err.message || String(err) });
+    return { error: err.message || String(err) };
+  }
+}
+
 // Replace the cloud copy with everything on this device (mirror, including
 // removals). Escape hatch when normal merging can't decide.
 export async function forceUpload() {
@@ -167,6 +226,7 @@ export async function forceUpload() {
   if (!supa || !status.user) return { error: 'Not signed in.' };
   setStatus({ state: 'syncing' });
   try {
+    await snapshotCloudToBackup(supa);
     const now = Date.now();
     const rows = getSyncSnapshot().map(({ key, value }) => {
       applyRemoteValue(key, value, now); // re-stamp local meta so this version wins everywhere
@@ -193,6 +253,23 @@ export async function forceDownload() {
   if (!supa || !status.user) return { error: 'Not signed in.' };
   setStatus({ state: 'syncing' });
   try {
+    // Preserve this device's data in the backup too (merged over cloud rows)
+    // so an accidental force-download is also undoable.
+    const { data: cloudRows, error: bErr } = await supa.from(TABLE).select('key,value,updated_at');
+    if (bErr) throw bErr;
+    const merged = new Map((cloudRows || []).filter((r) => r.key !== BACKUP_KEY).map((r) => [r.key, r]));
+    for (const { key, value } of getSyncSnapshot()) {
+      if (value != null) merged.set(key, { key, value, updated_at: new Date().toISOString() });
+    }
+    await supa.from(TABLE).upsert(
+      {
+        user_id: status.user.id,
+        key: BACKUP_KEY,
+        value: { snapshotAt: new Date().toISOString(), rows: [...merged.values()] },
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,key' },
+    );
     const { data, error } = await supa.from(TABLE).select('key,value,updated_at');
     if (error) throw error;
     const remote = new Map((data || []).map((r) => [r.key, r]));
