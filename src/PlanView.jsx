@@ -69,6 +69,8 @@ export default function PlanView({
   const [showMilestones, setShowMilestones] = useState(false);
   const [editingDate, setEditingDate] = useState(null);
   const [editingText, setEditingText] = useState('');
+  const [editingTime, setEditingTime] = useState('');
+  const [editingDuration, setEditingDuration] = useState('');
   const [swapSource, setSwapSource] = useState(null);
   const [quickLog, setQuickLog] = useState(null);
   const [newMilestone, setNewMilestone] = useState({ targetDate: '', title: '', notes: '' });
@@ -105,11 +107,28 @@ export default function PlanView({
   function startEdit(date) {
     setEditingDate(date);
     setEditingText(schedule?.[date]?.session || '');
+    setEditingTime(schedule?.[date]?.time || '');
+    setEditingDuration(schedule?.[date]?.durationMin || '');
   }
   function commitEdit() {
-    if (editingDate) updateSession(editingDate, editingText);
+    if (editingDate) {
+      const existing = schedule?.[editingDate] || {};
+      const next = {
+        ...schedule,
+        [editingDate]: {
+          ...existing,
+          session: editingText,
+          time: editingTime || '',
+          durationMin: Number(editingDuration) || 0,
+        },
+      };
+      storage.setSchedule(next);
+      onScheduleChange(next);
+    }
     setEditingDate(null);
     setEditingText('');
+    setEditingTime('');
+    setEditingDuration('');
   }
 
   function saveMaster() {
@@ -247,6 +266,12 @@ export default function PlanView({
               {formatPretty(date)}
               {!isToday && !isTomorrow && daysOut != null && daysOut > 0 ? ` · in ${daysOut}d` : ''}
             </span>
+            {schedule?.[date]?.time && (
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 11, letterSpacing: '0.1em', color: 'var(--gold)' }}>
+                ⏰ {schedule[date].time}
+                {schedule[date].durationMin ? ` · ${schedule[date].durationMin} min` : ''}
+              </span>
+            )}
           </div>
           {pill && (
             <span
@@ -273,7 +298,15 @@ export default function PlanView({
               onChange={setEditingText}
               placeholder="e.g. Bike threshold 75 min"
             />
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <Field label="⏰ Start time" hint="Used for the Outlook event.">
+                <TextInput type="time" value={editingTime} onChange={setEditingTime} />
+              </Field>
+              <Field label="Duration (min)">
+                <TextInput type="number" value={editingDuration} onChange={setEditingDuration} placeholder="60" />
+              </Field>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
               <GhostButton onClick={() => setEditingDate(null)}>Cancel</GhostButton>
               <GoldButton onClick={commitEdit}>Save</GoldButton>
             </div>

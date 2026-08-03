@@ -109,16 +109,24 @@ function deviceTimeZone() {
   }
 }
 
-// Pull a start time out of session text ("7am", "06:30", "7:15pm"); default 06:00.
+// Pull a start time out of session text; default 06:00. Careful not to read
+// pace/interval figures ("off 1:50", "3x12min") as clock times.
 function parseSessionTime(text) {
   const t = String(text || '');
-  let m = t.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
-  if (m) return `${m[1].padStart(2, '0')}:${m[2]}`;
-  m = t.match(/\b(\d{1,2})\s*(am|pm)\b/i);
+  let m = t.match(/\b(\d{1,2})(?::([0-5]\d))?\s*(am|pm)\b/i);
   if (m) {
     let h = Number(m[1]) % 12;
-    if (/pm/i.test(m[2])) h += 12;
-    return `${String(h).padStart(2, '0')}:00`;
+    if (/pm/i.test(m[3])) h += 12;
+    return `${String(h).padStart(2, '0')}:${m[2] || '00'}`;
+  }
+  // Bare HH:MM only counts when it reads like a real start: waking hours,
+  // not preceded by interval markers (x, ×, @, "off").
+  const re = /(^|[^\d@x×])(\b(0?[5-9]|1\d|2[01]):([0-5]\d)\b)/gi;
+  let match;
+  while ((match = re.exec(t))) {
+    const before = t.slice(Math.max(0, match.index - 4), match.index + 1);
+    if (/off\s?$/i.test(before)) continue;
+    return `${match[3].padStart(2, '0')}:${match[4]}`;
   }
   return '06:00';
 }
@@ -174,8 +182,9 @@ function buildDesiredEvents({ schedule, calendarEvents }) {
     const session = (entry?.session || '').trim();
     if (!session || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date < from) continue;
     if (/^😴/.test(shortTitle(session))) continue; // rest days don't need diary slots
-    const time = parseSessionTime(session);
-    const mins = parseSessionMinutes(session);
+    // Explicit per-day time/duration (set on the Plan tab) beats text parsing
+    const time = /^\d{2}:\d{2}$/.test(entry?.time || '') ? entry.time : parseSessionTime(session);
+    const mins = Number(entry?.durationMin) > 0 ? Number(entry.durationMin) : parseSessionMinutes(session);
     const end = addMinutes(date, time, mins);
     desired.set(`forge-sched-${date}`, {
       subject: shortTitle(session),
@@ -202,17 +211,22 @@ function buildDesiredEvents({ schedule, calendarEvents }) {
 }
 
 // Fetch our previously-created events (by hidden ForgeUid) in a wide window.
+// Prefer header makes Graph return times in the device timezone so they
+// compare cleanly against what we push.
 async function fetchOurEvents() {
   const today = todayIso();
   const from = addDays(today, -30);
   const to = addDays(today, 120);
+  const tz = deviceTimeZone();
   const map = new Map(); // uid -> { id, subject, start, end, bodyPreview }
   let url =
     `/me/calendarView?startDateTime=${from}T00:00:00&endDateTime=${to}T23:59:59` +
-    `&$select=id,subject,start,end&$top=200` +
+    `&$select=id,subject,start,end,bodyPreview&$top=200` +
     `&$expand=singleValueExtendedProperties($filter=id eq '${EXT_PROP}')`;
   while (url) {
-    const page = await graphFetch(url.startsWith('http') ? url.replace(GRAPH, '') : url);
+    const page = await graphFetch(url.startsWith('http') ? url.replace(GRAPH, '') : url, {
+      headers: { Prefer: `outlook.timezone="${tz}"` },
+    });
     for (const ev of page.value || []) {
       const uid = ev.singleValueExtendedProperties?.find((p) => p.id === EXT_PROP)?.value;
       if (uid) map.set(uid, ev);
@@ -222,47 +236,61 @@ async function fetchOurEvents() {
   return map;
 }
 
-// Reconcile: create / update / delete our events to match the desired plan.
-export async function pushToOutlook({ schedule, calendarEvents }) {
-  const desired = buildDesiredEvents({ schedule, calendarEvents });
-  const existing = await fetchOurEvents();
-  let created = 0;
-  let updated = 0;
-  let removed = 0;
+const squash = (s) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 120);
 
-  for (const [uid, payload] of desired) {
-    const current = existing.get(uid);
-    if (!current) {
-      await graphFetch('/me/events', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...payload,
-          singleValueExtendedProperties: [{ id: EXT_PROP, value: uid }],
-        }),
-      });
-      created++;
-    } else {
-      const changed =
-        current.subject !== payload.subject ||
-        !(current.start?.dateTime || '').startsWith(payload.start.dateTime);
-      if (changed) {
-        await graphFetch(`/me/events/${current.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify(payload),
+let pushInFlight = null;
+
+// Reconcile: create / update / delete our events to match the desired plan.
+// Serialised: concurrent calls (auto-push racing a manual push) queue up so
+// two reconciles never interleave and clobber each other.
+export function pushToOutlook(data) {
+  const run = async () => {
+    const desired = buildDesiredEvents(data);
+    const existing = await fetchOurEvents();
+    let created = 0;
+    let updated = 0;
+    let removed = 0;
+
+    for (const [uid, payload] of desired) {
+      const current = existing.get(uid);
+      if (!current) {
+        await graphFetch('/me/events', {
+          method: 'POST',
+          body: JSON.stringify({
+            ...payload,
+            singleValueExtendedProperties: [{ id: EXT_PROP, value: uid }],
+          }),
         });
-        updated++;
+        created++;
+      } else {
+        // Compare title, start AND content — a swapped session can keep a
+        // similar title but must still update the description.
+        const changed =
+          current.subject !== payload.subject ||
+          !(current.start?.dateTime || '').startsWith(payload.start.dateTime) ||
+          squash(current.bodyPreview) !== squash(payload.body.content);
+        if (changed) {
+          await graphFetch(`/me/events/${current.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          });
+          updated++;
+        }
       }
     }
-  }
 
-  for (const [uid, ev] of existing) {
-    if (!desired.has(uid)) {
-      await graphFetch(`/me/events/${ev.id}`, { method: 'DELETE' });
-      removed++;
+    for (const [uid, ev] of existing) {
+      if (!desired.has(uid)) {
+        await graphFetch(`/me/events/${ev.id}`, { method: 'DELETE' });
+        removed++;
+      }
     }
-  }
 
-  return { created, updated, removed };
+    return { created, updated, removed };
+  };
+
+  pushInFlight = (pushInFlight || Promise.resolve()).catch(() => {}).then(run);
+  return pushInFlight;
 }
 
 // The athlete's REAL diary (their events, not ours) for coach context.

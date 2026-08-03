@@ -196,6 +196,7 @@ sun: ...
 Rules:
 - \`weekStarts\` is the Monday of the week you're planning — use today's date (provided in your context) to work out the correct Monday. If the athlete says "this coming week" and today is Friday 2026-04-18, weekStarts is 2026-04-21.
 - Each day's value is a concise summary of the session — one or two lines is enough for this block; your richer prose can live above.
+- **Start each session with its clock time** when you know or can sensibly place it (e.g. "06:30 Swim 2.5km CSS…", "6pm Turbo 75 min…") — the athlete's calendar integration reads that time to place the event in their real diary. Use their diary, stated preferences (early bird) and work pattern to pick times; default to early morning.
 - No blank \`mon: / tue:\` — always include all seven days. Use "Rest" for rest days.
 - Do NOT put the \`<<<FORGE-WEEKPLAN\` block anywhere except at the end of a message where you've just laid out a full week. The app uses it to auto-fill the Plan tab — missing or malformed blocks mean the athlete has to type everything in by hand.
 
