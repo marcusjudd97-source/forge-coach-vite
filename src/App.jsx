@@ -11,7 +11,8 @@ import LogView from './LogView.jsx';
 import SettingsView from './SettingsView.jsx';
 import { COACHES, COACH_ORDER } from './coaches.js';
 import { storage, addDays, DAY_ORDER } from './storage.js';
-import { initSync } from './sync.js';
+import { initSync, syncConfigured, getSyncStatus, onSyncStatus } from './sync.js';
+import LoginGate from './LoginGate.jsx';
 import { initGraph, getOutlookAccount, fetchOutlookWeek, pushToOutlook } from './msgraph.js';
 
 const MOBILE_BREAKPOINT = 640;
@@ -19,6 +20,7 @@ const MOBILE_BREAKPOINT = 640;
 const NAV = [
   { id: 'home', label: 'Home', icon: '🏠' },
   { id: 'day', label: 'Day', icon: '☀️' },
+  { id: 'habits', label: 'Habits', icon: '✅' },
   { id: 'plan', label: 'Plan', icon: '📋' },
   { id: 'food', label: 'Food', icon: '🥗' },
   { id: 'coaches', label: 'Coaches', icon: '💬' },
@@ -62,6 +64,48 @@ function SettingsGear({ onClick }) {
   );
 }
 
+function SyncSplash({ label }) {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 18,
+      }}
+    >
+      <div style={{ fontSize: 44 }}>🔥</div>
+      <div
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 14,
+          letterSpacing: '0.24em',
+          color: 'var(--gold)',
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: 'var(--gold)',
+              animation: `pulse 1s ease-in-out ${i * 0.15}s infinite`,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Brand({ compact }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -84,7 +128,7 @@ function Brand({ compact }) {
   );
 }
 
-function DesktopSidebar({ view, onNav, onSettings, activeCoach, onSelectCoach, showCoaches, navItems }) {
+function DesktopSidebar({ view, onNav, onSettings, activeCoach, onSelectCoach, showCoaches, navItems, syncLabel }) {
   return (
     <aside
       style={{
@@ -190,7 +234,7 @@ function DesktopSidebar({ view, onNav, onSettings, activeCoach, onSelectCoach, s
       </nav>
 
       <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Data local to browser</span>
+        <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{syncLabel || 'Data local to browser'}</span>
         <SettingsGear onClick={onSettings} />
       </div>
     </aside>
@@ -218,7 +262,8 @@ function MobileBottomNav({ view, onNav }) {
             onClick={() => onNav(n.id)}
             style={{
               flex: 1,
-              padding: '10px 4px 10px',
+              minWidth: 0,
+              padding: '9px 2px 9px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -228,12 +273,16 @@ function MobileBottomNav({ view, onNav }) {
               cursor: 'pointer',
             }}
           >
-            <span style={{ fontSize: 22 }}>{n.icon}</span>
+            <span style={{ fontSize: 20 }}>{n.icon}</span>
             <span
               style={{
                 fontFamily: 'var(--font-display)',
-                fontSize: 10,
-                letterSpacing: '0.14em',
+                fontSize: 9,
+                letterSpacing: '0.05em',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%',
               }}
             >
               {n.label.toUpperCase()}
@@ -364,6 +413,10 @@ export default function App() {
   const [view, setView] = useState('home');
   const [activeCoach, setActiveCoach] = useState('');
   const [updateReady, setUpdateReady] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(() => getSyncStatus());
+  const [gateSkipped, setGateSkipped] = useState(false);
+
+  useEffect(() => onSyncStatus(setSyncStatus), []);
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT,
   );
@@ -443,17 +496,6 @@ export default function App() {
     }, 4000);
     return () => clearTimeout(t);
   }, [schedule, calendarEvents]);
-
-  if (!apiKey) {
-    return (
-      <ApiKeySetup
-        onSave={(k) => {
-          storage.setApiKey(k);
-          setApiKey(k);
-        }}
-      />
-    );
-  }
 
   function handleChangeApiKey() {
     storage.clearApiKey();
@@ -599,6 +641,31 @@ export default function App() {
     () => (coach ? chats[coach.id] || [] : []),
     [chats, coach],
   );
+
+  // Gates render AFTER every hook (rules of hooks). Order: API key → account
+  // sign-in → launch pull. With sync configured, the account is the source of
+  // truth: nothing shows until this device mirrors it.
+  if (!apiKey) {
+    return (
+      <ApiKeySetup
+        onSave={(k) => {
+          storage.setApiKey(k);
+          setApiKey(k);
+        }}
+      />
+    );
+  }
+  if (syncConfigured && !gateSkipped) {
+    if (!syncStatus.authKnown) {
+      return <SyncSplash label="CHECKING YOUR ACCOUNT…" />;
+    }
+    if (!syncStatus.user) {
+      return <LoginGate onSkip={() => setGateSkipped(true)} />;
+    }
+    if (!syncStatus.firstSyncDone) {
+      return <SyncSplash label="SYNCING YOUR ACCOUNT…" />;
+    }
+  }
 
   let body;
   let mobileTitle = 'FORGE';
@@ -843,6 +910,16 @@ export default function App() {
     </button>
   ) : null;
 
+  const syncLabel = !syncConfigured
+    ? 'Data local to browser'
+    : syncStatus.user
+      ? syncStatus.state === 'syncing'
+        ? 'Syncing…'
+        : syncStatus.state === 'error'
+          ? '⚠ Sync error'
+          : `Synced ✓${syncStatus.lastSyncAt ? ` ${new Date(syncStatus.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`
+      : '⚠ Not signed in — local only';
+
   if (!isMobile) {
     return (
       <div style={{ display: 'flex', width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -857,6 +934,7 @@ export default function App() {
           onSelectCoach={openCoach}
           showCoaches={desktopShowCoachList}
           navItems={DESKTOP_NAV}
+          syncLabel={syncLabel}
         />
         <main
           style={{

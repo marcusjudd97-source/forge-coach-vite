@@ -35,6 +35,8 @@ let status = {
   error: '',
   lastSyncAt: null, // ms epoch
   user: null, // supabase user or null
+  authKnown: false, // true once the stored session has been checked
+  firstSyncDone: false, // true once the launch pull has completed (or failed)
 };
 const statusListeners = new Set();
 
@@ -151,10 +153,10 @@ export async function fullSync() {
       if (upErr) throw upErr;
     }
 
-    setStatus({ state: 'synced', error: '', lastSyncAt: Date.now() });
+    setStatus({ state: 'synced', error: '', lastSyncAt: Date.now(), firstSyncDone: true });
     if (applied && onRemoteApplied) onRemoteApplied();
   } catch (err) {
-    setStatus({ state: 'error', error: err.message || String(err) });
+    setStatus({ state: 'error', error: err.message || String(err), firstSyncDone: true });
   } finally {
     syncingSince = 0;
   }
@@ -334,7 +336,7 @@ export function initSync({ onRemoteApplied: cb } = {}) {
 
   supa.auth.onAuthStateChange((event, session) => {
     const user = session?.user || null;
-    setStatus({ user });
+    setStatus({ user, authKnown: true });
     if (user && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
       // Deferred: Supabase API calls made synchronously from inside this
       // callback can deadlock on the client's internal auth lock.
