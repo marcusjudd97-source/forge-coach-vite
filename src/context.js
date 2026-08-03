@@ -323,6 +323,23 @@ You can see their whole system: daily sheets, habit tracker, training plan and l
 ${lines.join('\n')}`;
 }
 
+function diaryEventsBlock(calendarEvents) {
+  if (!Array.isArray(calendarEvents) || !calendarEvents.length) return '';
+  const today = todayIso();
+  const horizon = addDays(today, 10);
+  const upcoming = calendarEvents
+    .filter((e) => e?.date >= today && e?.date <= horizon && e?.title)
+    .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')))
+    .slice(0, 25);
+  if (!upcoming.length) return '';
+  const lines = upcoming.map(
+    (e) => `- ${e.date}${e.time ? ` ${e.time}` : ''} — ${e.title}${e.notes ? ` (${e.notes.slice(0, 80)})` : ''}`,
+  );
+  return `## Diary — Booked Commitments (next 10 days)
+These are already in the athlete's calendar (shops, meal prep, dinners, admin, race logistics). Plan AROUND them: don't schedule sessions or tasks that clash, reference them when relevant ("big shop Sunday 9am, so long ride starts 7"), and treat them as constraints on when the athlete can and can't train.
+${lines.join('\n')}`;
+}
+
 function milestonesBlock(milestones) {
   if (!Array.isArray(milestones) || milestones.length === 0) return '';
   const sorted = [...milestones].sort((a, b) => (a.targetDate || '').localeCompare(b.targetDate || ''));
@@ -351,6 +368,7 @@ export function buildAthleteContext({
   affirmations,
   daily,
   habits,
+  calendarEvents,
 }) {
   const blocks = [
     dateBlock(),
@@ -362,6 +380,7 @@ export function buildAthleteContext({
     dailySheetsBlock(daily),
     planTextBlock(planText),
     scheduleBlock(schedule),
+    diaryEventsBlock(calendarEvents),
     milestonesBlock(milestones),
     logBlock(log),
     voiceBlock(voiceNote),

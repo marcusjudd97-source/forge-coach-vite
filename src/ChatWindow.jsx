@@ -16,7 +16,7 @@ import {
   stripForgeBlocks,
 } from './parsers.js';
 import { buildEventsIcs, downloadIcs } from './calendar.js';
-import { storage, todayIso } from './storage.js';
+import { todayIso } from './storage.js';
 import { getSyncStatus } from './sync.js';
 
 function formatMessage(text, accentColor) {
@@ -128,6 +128,8 @@ export default function ChatWindow({
   affirmations,
   daily,
   habits,
+  calendarEvents,
+  onAddCalendarEvents,
   onSavePlanFromMessage,
   onApplyWeekPlan,
   onApplyMilestones,
@@ -225,6 +227,7 @@ export default function ChatWindow({
       affirmations,
       daily,
       habits,
+      calendarEvents,
     });
     return buildSystemPrompt(coach.systemPrompt, ctx);
   }
@@ -573,13 +576,10 @@ export default function ChatWindow({
                 if (!events) return;
                 // Save into the synced diary store — the live Outlook feed
                 // serves these. Falls back to .ics download when not signed in.
-                const existing = storage.getCalendarEvents();
-                const seen = new Set(existing.map((e) => `${e.date}|${e.title}`));
-                const fresh = events.filter((e) => !seen.has(`${e.date}|${e.title}`));
-                if (fresh.length) storage.setCalendarEvents([...existing, ...fresh]);
+                const added = onAddCalendarEvents ? onAddCalendarEvents(events) : 0;
                 if (getSyncStatus().user) {
                   window.alert(
-                    `${fresh.length ? `Added ${fresh.length} event${fresh.length === 1 ? '' : 's'} to your diary` : 'Those events are already in your diary'} — Outlook picks them up automatically via your subscribed FORGE calendar.`,
+                    `${added ? `Added ${added} event${added === 1 ? '' : 's'} to your diary` : 'Those events are already in your diary'} — Outlook picks them up automatically via your subscribed FORGE calendar, and your coaches can see them.`,
                   );
                 } else {
                   downloadIcs(`forge-diary-${todayIso()}.ics`, buildEventsIcs(events));

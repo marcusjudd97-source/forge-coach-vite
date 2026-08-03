@@ -68,6 +68,7 @@ export default function PlanView({
   const [showMilestones, setShowMilestones] = useState(false);
   const [editingDate, setEditingDate] = useState(null);
   const [editingText, setEditingText] = useState('');
+  const [swapSource, setSwapSource] = useState(null);
   const [quickLog, setQuickLog] = useState(null);
   const [newMilestone, setNewMilestone] = useState({ targetDate: '', title: '', notes: '' });
 
@@ -85,6 +86,19 @@ export default function PlanView({
     const next = { ...schedule, [date]: { ...existing, feedback } };
     storage.setSchedule(next);
     onScheduleChange(next);
+  }
+
+  function swapSessions(dateA, dateB) {
+    const a = schedule?.[dateA] || {};
+    const b = schedule?.[dateB] || {};
+    const next = {
+      ...schedule,
+      [dateA]: { ...a, session: b.session || '' },
+      [dateB]: { ...b, session: a.session || '' },
+    };
+    storage.setSchedule(next);
+    onScheduleChange(next);
+    setSwapSource(null);
   }
 
   function startEdit(date) {
@@ -318,6 +332,14 @@ export default function PlanView({
           )}
           {session && (
             <GhostButton
+              onClick={() => setSwapSource(swapSource === date ? null : date)}
+              style={swapSource === date ? { color: 'var(--gold)', borderColor: 'rgba(200,146,42,0.5)' } : undefined}
+            >
+              ⇄ Swap
+            </GhostButton>
+          )}
+          {session && (
+            <GhostButton
               onClick={() => window.open(outlookEventUrl(date, session), '_blank', 'noopener')}
               style={{ color: 'var(--text-mid)' }}
             >
@@ -325,6 +347,83 @@ export default function PlanView({
             </GhostButton>
           )}
         </div>
+
+        {swapSource === date && (
+          <div
+            style={{
+              marginTop: 10,
+              padding: 12,
+              borderRadius: 12,
+              background: 'var(--bg2)',
+              border: '1px solid rgba(200, 146, 42, 0.35)',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 11,
+                letterSpacing: '0.2em',
+                color: 'var(--gold)',
+                marginBottom: 8,
+              }}
+            >
+              SWAP THIS SESSION WITH…
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {dates
+                .filter((d) => d !== date)
+                .map((d) => {
+                  const target = schedule?.[d]?.session || '';
+                  return (
+                    <button
+                      key={d}
+                      onClick={() => swapSessions(date, d)}
+                      style={{
+                        display: 'flex',
+                        gap: 10,
+                        alignItems: 'baseline',
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        background: 'var(--bg3)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text)',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-display)',
+                          fontSize: 11,
+                          letterSpacing: '0.12em',
+                          color: 'var(--text-mid)',
+                          flexShrink: 0,
+                          minWidth: 86,
+                        }}
+                      >
+                        {formatPretty(d).toUpperCase()}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: target ? 'var(--text)' : 'var(--text-dim)',
+                          fontStyle: target ? 'normal' : 'italic',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {target ? target.split('\n')[0] : 'Empty — move it here'}
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic', marginTop: 8 }}>
+              Outlook updates itself on its next refresh — nothing else to do.
+            </div>
+          </div>
+        )}
       </div>
     );
   }

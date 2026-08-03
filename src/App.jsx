@@ -353,6 +353,7 @@ export default function App() {
   const [affirmations, setAffirmations] = useState(() => storage.getAffirmations());
   const [daily, setDaily] = useState(() => storage.getDaily());
   const [habits, setHabits] = useState(() => storage.getHabits());
+  const [calendarEvents, setCalendarEvents] = useState(() => storage.getCalendarEvents());
 
   const [view, setView] = useState('home');
   const [activeCoach, setActiveCoach] = useState('');
@@ -410,6 +411,7 @@ export default function App() {
     setAffirmations(storage.getAffirmations());
     setDaily(storage.getDaily());
     setHabits(storage.getHabits());
+    setCalendarEvents(storage.getCalendarEvents());
   }
 
   function applyWeekPlan(parsed) {
@@ -448,6 +450,19 @@ export default function App() {
     storage.setAffirmations(parsed);
     setAffirmations(parsed);
     window.alert(`Saved ${parsed.length} affirmations — they're now on your Day sheet every morning and evening.`);
+  }
+
+  function addCalendarEvents(fresh) {
+    if (!Array.isArray(fresh) || !fresh.length) return 0;
+    const existing = storage.getCalendarEvents();
+    const seen = new Set(existing.map((e) => `${e.date}|${e.title}`));
+    const additions = fresh.filter((e) => !seen.has(`${e.date}|${e.title}`));
+    if (additions.length) {
+      const next = [...existing, ...additions];
+      storage.setCalendarEvents(next);
+      setCalendarEvents(next);
+    }
+    return additions.length;
   }
 
   function applyHabitsFromCoach(parsed) {
@@ -696,6 +711,8 @@ export default function App() {
             affirmations={affirmations}
             daily={daily}
             habits={habits}
+            calendarEvents={calendarEvents}
+            onAddCalendarEvents={addCalendarEvents}
             onSavePlanFromMessage={savePlanFromMessage}
             onApplyWeekPlan={applyWeekPlan}
             onApplyMilestones={applyMilestones}
