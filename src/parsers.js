@@ -3,6 +3,7 @@ import { DAY_ORDER } from './storage.js';
 const WEEK_BLOCK_RE = /<<<\s*FORGE-WEEKPLAN\s*([\s\S]*?)>>>/i;
 const MILESTONE_BLOCK_RE = /<<<\s*FORGE-MILESTONES\s*([\s\S]*?)>>>/i;
 const PROFILE_BLOCK_RE = /<<<\s*FORGE-PROFILE\s*([\s\S]*?)>>>/i;
+const DIARY_BLOCK_RE = /<<<\s*FORGE-DIARY\s*([\s\S]*?)>>>/i;
 
 export function hasWeekBlock(text) {
   return typeof text === 'string' && WEEK_BLOCK_RE.test(text);
@@ -14,6 +15,36 @@ export function hasMilestonesBlock(text) {
 
 export function hasProfileBlock(text) {
   return typeof text === 'string' && PROFILE_BLOCK_RE.test(text);
+}
+
+export function hasDiaryBlock(text) {
+  return typeof text === 'string' && DIARY_BLOCK_RE.test(text);
+}
+
+// Lines: - YYYY-MM-DD | HH:MM (or "allday") | duration min | Title | notes
+export function parseDiaryBlock(text) {
+  if (!text) return null;
+  const match = text.match(DIARY_BLOCK_RE);
+  if (!match) return null;
+  const lines = match[1]
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && l !== '-');
+  const events = [];
+  for (const raw of lines) {
+    const stripped = raw.replace(/^[-*•]\s*/, '');
+    const parts = stripped.split('|').map((p) => p.trim());
+    if (parts.length < 4) continue;
+    const [date, timeRaw, durRaw, title, ...rest] = parts;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !title) continue;
+    const timeMatch = timeRaw.match(/^(\d{1,2}):(\d{2})$/);
+    const time = timeMatch
+      ? `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`
+      : ''; // anything else (e.g. "allday") = all-day event
+    const durationMin = Math.max(0, parseInt(durRaw, 10) || 0) || 60;
+    events.push({ date, time, durationMin, title, notes: rest.join(' | ') });
+  }
+  return events.length ? events : null;
 }
 
 const PROFILE_KEYS = new Set([
@@ -124,6 +155,7 @@ export function stripForgeBlocks(text) {
     .replace(WEEK_BLOCK_RE, '')
     .replace(MILESTONE_BLOCK_RE, '')
     .replace(PROFILE_BLOCK_RE, '')
+    .replace(DIARY_BLOCK_RE, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }

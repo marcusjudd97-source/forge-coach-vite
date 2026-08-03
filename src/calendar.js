@@ -80,6 +80,48 @@ export function buildScheduleIcs(schedule, fromDate) {
   return lines.join('\r\n') + '\r\n';
 }
 
+// Diary events from a coach's FORGE-DIARY block: timed where a time is given
+// (floating local time — calendar apps read it in the athlete's own timezone),
+// all-day otherwise.
+export function buildEventsIcs(events) {
+  const dtstamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//FORGE//Ironman Coaching Suite//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    foldLine('X-WR-CALNAME:FORGE Food & Prep'),
+  ];
+  (events || []).forEach((ev, i) => {
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:forge-diary-${ev.date}-${i}@forge-coach`,
+      `DTSTAMP:${dtstamp}`,
+    );
+    if (ev.time) {
+      const start = new Date(`${ev.date}T${ev.time}:00`);
+      const end = new Date(start.getTime() + (ev.durationMin || 60) * 60000);
+      const fmt = (d) =>
+        `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}` +
+        `T${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}00`;
+      lines.push(`DTSTART:${fmt(start)}`, `DTEND:${fmt(end)}`);
+    } else {
+      lines.push(
+        `DTSTART;VALUE=DATE:${ev.date.replaceAll('-', '')}`,
+        `DTEND;VALUE=DATE:${addDays(ev.date, 1).replaceAll('-', '')}`,
+      );
+    }
+    lines.push(
+      foldLine(`SUMMARY:${icsEscape(ev.title)}`),
+      foldLine(`DESCRIPTION:${icsEscape(ev.notes || '')}`),
+      'END:VEVENT',
+    );
+  });
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n') + '\r\n';
+}
+
 export function downloadIcs(filename, icsText) {
   const blob = new Blob([icsText], { type: 'text/calendar;charset=utf-8' });
   const url = URL.createObjectURL(blob);

@@ -424,6 +424,7 @@ Then say you'll use those to set an honest target run pace. No flattery.`,
     tagline: 'Fuel is the fourth discipline. From Monday breakfast to the finish line.',
     ...makeAccents('#4a8a2a'),
     suggestedPrompts: [
+      "Plan my food week: shopping trip, Sunday batch prep, and a dinner for every day — as diary events I can add to my calendar.",
       "Build me a 7-day meal plan for this training week — breakfast, lunch, dinner, snacks.",
       "Shopping list for that meal plan, organised by supermarket section.",
       "Give me 5 batch-cook recipes I can prep on a Sunday for the week.",
@@ -503,6 +504,28 @@ Include estimated **quantities** (e.g. "1 kg chicken thighs", "500 g oats", "6 b
 **Special-needs bags** — plan contents and timing.
 
 **The cardinal rule:** NEVER eat anything on race day you haven't practised in training.
+
+## DIARY EVENTS — GETTING THE FOOD WEEK INTO THE ATHLETE'S CALENDAR
+
+Whenever you deliver a weekly meal plan, prep schedule, or shopping plan, ALWAYS finish the message with a FORGE-DIARY block. The app turns it into a one-click calendar export (Outlook etc.), so every shop, prep session, and dinner lands in the athlete's actual diary.
+
+Format — one event per line, fields separated by \`|\`:
+
+<<<FORGE-DIARY
+- 2026-08-09 | 09:00 | 45 | Big shop — Tesco | Produce: 6 bananas, 500g spinach… Protein: 1kg chicken thighs, 12 eggs… Pantry: 500g oats, 1kg rice…
+- 2026-08-09 | 15:00 | 90 | Sunday meal prep | Batch: chilli x4 portions, overnight oats x3 jars, egg muffins x6. Containers out, rice cooked and cooled.
+- 2026-08-10 | 18:30 | 30 | Dinner: chilli + rice + greens | Reheat portion 1. Big carb portion — threshold bike day.
+- 2026-08-12 | 17:30 | 20 | Top-up shop | Fresh: salmon x2, salad, berries, milk.
+- 2026-08-12 | 19:00 | 35 | Dinner: sheet-pan salmon + potatoes | Cook fresh, 35 min including oven time.
+>>>
+
+Rules:
+- Dates are exact ISO dates taken from the "Today" section of your context — never day names alone. A "week" runs from the athlete's next shopping day forward.
+- Second field is a 24h start time, or the word \`allday\` for no fixed time. Third field is duration in minutes.
+- Put the FULL shopping list (aisle by aisle, with quantities) in the notes of the shopping event, and the top-up list in the top-up event — the athlete shops from their phone calendar.
+- One dinner event per day of the plan, named with the actual meal, timed to fit that day's training sessions from their schedule (dinner after an evening turbo, not during it).
+- Include: the main shop, 1–2 batch-prep sessions, any midweek top-up shop, and each day's dinner. Add breakfast/lunch events only if they need active cooking.
+- Keep the human-readable meal plan in the message body as normal — the block is IN ADDITION, at the very end. Never mention the block's syntax; just say the plan is ready to add to their calendar.
 
 ## STYLE
 - Precise and numerical. Exact grams, millilitres, milligrams with timing.

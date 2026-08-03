@@ -4,11 +4,15 @@ import {
   hasWeekBlock,
   hasMilestonesBlock,
   hasProfileBlock,
+  hasDiaryBlock,
   parseWeekBlock,
   parseMilestonesBlock,
   parseProfileBlock,
+  parseDiaryBlock,
   stripForgeBlocks,
 } from './parsers.js';
+import { buildEventsIcs, downloadIcs } from './calendar.js';
+import { todayIso } from './storage.js';
 
 function formatMessage(text, accentColor) {
   if (!text) return [];
@@ -384,6 +388,7 @@ export default function ChatWindow({
     lastAssistantContent.length > 200;
   const showApplyWeekBtn = hasWeekBlock(lastAssistantContent);
   const showApplyMilestonesBtn = hasMilestonesBlock(lastAssistantContent);
+  const showDiaryBtn = hasDiaryBlock(lastAssistantContent);
 
   return (
     <div
@@ -447,6 +452,28 @@ export default function ChatWindow({
               }}
             >
               APPLY MILESTONES
+            </button>
+          )}
+          {showDiaryBtn && (
+            <button
+              onClick={() => {
+                const events = parseDiaryBlock(lastAssistantContent);
+                if (!events) return;
+                downloadIcs(`forge-diary-${todayIso()}.ics`, buildEventsIcs(events));
+              }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                background: coach.accentDim,
+                border: `1px solid ${coach.accentBorder}`,
+                color: coach.accentColor,
+                fontFamily: 'var(--font-display)',
+                fontSize: 11,
+                letterSpacing: '0.18em',
+                cursor: 'pointer',
+              }}
+            >
+              📅 ADD TO CALENDAR (.ICS)
             </button>
           )}
           {showSavePlanBtn && (
