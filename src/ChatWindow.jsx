@@ -182,7 +182,7 @@ export default function ChatWindow({
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1600,
+        max_tokens: 8000,
         system: buildSystem(),
         messages: history,
       }),
@@ -193,11 +193,15 @@ export default function ChatWindow({
     }
     const data = await res.json();
     const parts = Array.isArray(data.content) ? data.content : [];
-    return parts
+    let text = parts
       .filter((p) => p.type === 'text')
       .map((p) => p.text)
       .join('\n')
       .trim();
+    if (data.stop_reason === 'max_tokens') {
+      text += '\n\n*…I ran out of space there — say "continue" and I\'ll finish.*';
+    }
+    return text;
   }
 
   async function sendMessage(text) {
@@ -388,7 +392,12 @@ export default function ChatWindow({
     lastAssistantContent.length > 200;
   const showApplyWeekBtn = hasWeekBlock(lastAssistantContent);
   const showApplyMilestonesBtn = hasMilestonesBlock(lastAssistantContent);
-  const showDiaryBtn = hasDiaryBlock(lastAssistantContent);
+  // Diary export stays available even after follow-up chatter: use the most
+  // recent assistant message that actually contains a diary block.
+  const lastDiaryContent =
+    [...(messages || [])].reverse().find((m) => m.role === 'assistant' && hasDiaryBlock(m.content))
+      ?.content || '';
+  const showDiaryBtn = !!lastDiaryContent;
 
   return (
     <div
@@ -457,7 +466,7 @@ export default function ChatWindow({
           {showDiaryBtn && (
             <button
               onClick={() => {
-                const events = parseDiaryBlock(lastAssistantContent);
+                const events = parseDiaryBlock(lastDiaryContent);
                 if (!events) return;
                 downloadIcs(`forge-diary-${todayIso()}.ics`, buildEventsIcs(events));
               }}

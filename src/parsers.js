@@ -17,14 +17,17 @@ export function hasProfileBlock(text) {
   return typeof text === 'string' && PROFILE_BLOCK_RE.test(text);
 }
 
+// Fallback for replies truncated mid-block: open marker but no closing >>>
+const DIARY_BLOCK_OPEN_RE = /<<<\s*FORGE-DIARY\s*([\s\S]*)$/i;
+
 export function hasDiaryBlock(text) {
-  return typeof text === 'string' && DIARY_BLOCK_RE.test(text);
+  return typeof text === 'string' && (DIARY_BLOCK_RE.test(text) || DIARY_BLOCK_OPEN_RE.test(text));
 }
 
 // Lines: - YYYY-MM-DD | HH:MM (or "allday") | duration min | Title | notes
 export function parseDiaryBlock(text) {
   if (!text) return null;
-  const match = text.match(DIARY_BLOCK_RE);
+  const match = text.match(DIARY_BLOCK_RE) || text.match(DIARY_BLOCK_OPEN_RE);
   if (!match) return null;
   const lines = match[1]
     .split('\n')
@@ -156,6 +159,7 @@ export function stripForgeBlocks(text) {
     .replace(MILESTONE_BLOCK_RE, '')
     .replace(PROFILE_BLOCK_RE, '')
     .replace(DIARY_BLOCK_RE, '')
+    .replace(DIARY_BLOCK_OPEN_RE, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
