@@ -6,6 +6,8 @@ import {
   signUp,
   signOut,
   fullSync,
+  forceUpload,
+  forceDownload,
 } from './sync.js';
 import { Section, Field, TextInput, GoldButton, GhostButton } from './ui.jsx';
 
@@ -86,6 +88,31 @@ export default function AccountSync() {
           <div style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic', marginTop: 12, lineHeight: 1.5 }}>
             Profile, plan, log, chats and voice notes sync automatically to your account.
             Your Anthropic API key is never synced — enter it once per device.
+          </div>
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.5 }}>
+              If the automatic merge ever gets stuck, force a direction from the device you trust:
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <GhostButton
+                disabled={status.state === 'syncing'}
+                onClick={() => {
+                  if (!window.confirm('Replace the CLOUD copy with everything on THIS device?')) return;
+                  run(() => forceUpload(), 'Uploaded — this device is now the master copy.');
+                }}
+              >
+                ⬆ FORCE UPLOAD
+              </GhostButton>
+              <GhostButton
+                disabled={status.state === 'syncing'}
+                onClick={() => {
+                  if (!window.confirm('Replace everything on THIS device with the cloud copy? Local-only changes will be lost.')) return;
+                  run(() => forceDownload(), 'Downloaded — this device now matches the cloud.');
+                }}
+              >
+                ⬇ FORCE DOWNLOAD
+              </GhostButton>
+            </div>
           </div>
         </>
       ) : (

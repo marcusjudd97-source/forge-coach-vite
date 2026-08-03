@@ -93,17 +93,19 @@ async function flushPush() {
 // ── full sync (pull + reconcile) ────────────────────────────────────────────
 
 let onRemoteApplied = null;
-let syncing = false;
+let syncingSince = 0; // 0 = not syncing; stale after 20s so a hung sync can't block forever
 
 export async function fullSync() {
   const supa = getClient();
-  if (!supa || !status.user || syncing) return;
-  syncing = true;
+  if (!supa || !status.user) return;
+  if (syncingSince && Date.now() - syncingSince < 20000) return;
+  syncingSince = Date.now();
   setStatus({ state: 'syncing' });
   try {
     const { data, error } = await supa.from(TABLE).select('key,value,updated_at');
     if (error) throw error;
 
+    const now = Date.now();
     const remote = new Map((data || []).map((r) => [r.key, r]));
     const pushRows = [];
     let applied = false;
@@ -121,6 +123,24 @@ export async function fullSync() {
           value,
           updated_at: new Date(ts).toISOString(),
         });
+      } else if (ts === remoteTs && ts === 1) {
+        // Pre-sync data on both devices: timestamps are both the legacy "1",
+        // so neither side wins on time. Keep the larger payload — a real
+        // profile/log always beats a near-empty default.
+        const localLen = JSON.stringify(value ?? null).length;
+        const remoteLen = JSON.stringify(row.value ?? null).length;
+        if (remoteLen > localLen) {
+          applyRemoteValue(key, row.value, remoteTs);
+          applied = true;
+        } else if (localLen > remoteLen) {
+          applyRemoteValue(key, value, now); // re-stamp locally so it now outranks the cloud copy
+          pushRows.push({
+            user_id: status.user.id,
+            key,
+            value,
+            updated_at: new Date(now).toISOString(),
+          });
+        }
       }
     }
 
@@ -136,7 +156,57 @@ export async function fullSync() {
   } catch (err) {
     setStatus({ state: 'error', error: err.message || String(err) });
   } finally {
-    syncing = false;
+    syncingSince = 0;
+  }
+}
+
+// Replace the cloud copy with everything on this device (mirror, including
+// removals). Escape hatch when normal merging can't decide.
+export async function forceUpload() {
+  const supa = getClient();
+  if (!supa || !status.user) return { error: 'Not signed in.' };
+  setStatus({ state: 'syncing' });
+  try {
+    const now = Date.now();
+    const rows = getSyncSnapshot().map(({ key, value }) => {
+      applyRemoteValue(key, value, now); // re-stamp local meta so this version wins everywhere
+      return {
+        user_id: status.user.id,
+        key,
+        value,
+        updated_at: new Date(now).toISOString(),
+      };
+    });
+    const { error } = await supa.from(TABLE).upsert(rows, { onConflict: 'user_id,key' });
+    if (error) throw error;
+    setStatus({ state: 'synced', error: '', lastSyncAt: Date.now() });
+    return {};
+  } catch (err) {
+    setStatus({ state: 'error', error: err.message || String(err) });
+    return { error: err.message || String(err) };
+  }
+}
+
+// Replace everything on this device with the cloud copy.
+export async function forceDownload() {
+  const supa = getClient();
+  if (!supa || !status.user) return { error: 'Not signed in.' };
+  setStatus({ state: 'syncing' });
+  try {
+    const { data, error } = await supa.from(TABLE).select('key,value,updated_at');
+    if (error) throw error;
+    const remote = new Map((data || []).map((r) => [r.key, r]));
+    for (const { key } of getSyncSnapshot()) {
+      const row = remote.get(key);
+      if (row) applyRemoteValue(key, row.value, Date.parse(row.updated_at) || Date.now());
+      else applyRemoteValue(key, null, Date.now());
+    }
+    setStatus({ state: 'synced', error: '', lastSyncAt: Date.now() });
+    if (onRemoteApplied) onRemoteApplied();
+    return {};
+  } catch (err) {
+    setStatus({ state: 'error', error: err.message || String(err) });
+    return { error: err.message || String(err) };
   }
 }
 
@@ -189,7 +259,9 @@ export function initSync({ onRemoteApplied: cb } = {}) {
     const user = session?.user || null;
     setStatus({ user });
     if (user && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
-      fullSync();
+      // Deferred: Supabase API calls made synchronously from inside this
+      // callback can deadlock on the client's internal auth lock.
+      setTimeout(() => fullSync(), 0);
     }
   });
 
