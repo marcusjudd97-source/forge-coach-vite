@@ -129,6 +129,7 @@ export default function ChatWindow({
   daily,
   habits,
   calendarEvents,
+  outlookWeek,
   onAddCalendarEvents,
   onSavePlanFromMessage,
   onApplyWeekPlan,
@@ -228,6 +229,7 @@ export default function ChatWindow({
       daily,
       habits,
       calendarEvents,
+      outlookWeek,
     });
     return buildSystemPrompt(coach.systemPrompt, ctx);
   }

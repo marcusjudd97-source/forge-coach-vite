@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ApiKeySetup from './ApiKeySetup.jsx';
 import ChatWindow from './ChatWindow.jsx';
 import HomeView from './HomeView.jsx';
@@ -11,6 +11,7 @@ import SettingsView from './SettingsView.jsx';
 import { COACHES, COACH_ORDER } from './coaches.js';
 import { storage, addDays, DAY_ORDER } from './storage.js';
 import { initSync } from './sync.js';
+import { initGraph, getOutlookAccount, fetchOutlookWeek, pushToOutlook } from './msgraph.js';
 
 const MOBILE_BREAKPOINT = 640;
 
@@ -354,6 +355,7 @@ export default function App() {
   const [daily, setDaily] = useState(() => storage.getDaily());
   const [habits, setHabits] = useState(() => storage.getHabits());
   const [calendarEvents, setCalendarEvents] = useState(() => storage.getCalendarEvents());
+  const [outlookWeek, setOutlookWeek] = useState(null);
 
   const [view, setView] = useState('home');
   const [activeCoach, setActiveCoach] = useState('');
@@ -375,6 +377,46 @@ export default function App() {
     initSync({ onRemoteApplied: handleDataImported });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    // Microsoft Graph: finish any login redirect, then read the real diary
+    // so coaches can plan around actual commitments. Refreshed on tab focus.
+    let cancelled = false;
+    async function refreshWeek() {
+      if (!getOutlookAccount()) return;
+      try {
+        const week = await fetchOutlookWeek();
+        if (!cancelled) setOutlookWeek(week);
+      } catch {
+        // token expired or offline — quietly skip
+      }
+    }
+    initGraph().then(refreshWeek);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') refreshWeek();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
+
+  const skipFirstPush = useRef(true);
+  useEffect(() => {
+    // Auto-push plan + diary changes into the connected Outlook calendar.
+    if (skipFirstPush.current) {
+      skipFirstPush.current = false;
+      return;
+    }
+    if (!getOutlookAccount()) return;
+    const t = setTimeout(() => {
+      pushToOutlook({ schedule: storage.getSchedule(), calendarEvents: storage.getCalendarEvents() }).catch(
+        () => {},
+      );
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [schedule, calendarEvents]);
 
   if (!apiKey) {
     return (
@@ -712,6 +754,7 @@ export default function App() {
             daily={daily}
             habits={habits}
             calendarEvents={calendarEvents}
+            outlookWeek={outlookWeek}
             onAddCalendarEvents={addCalendarEvents}
             onSavePlanFromMessage={savePlanFromMessage}
             onApplyWeekPlan={applyWeekPlan}

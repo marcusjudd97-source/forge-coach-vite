@@ -323,6 +323,19 @@ You can see their whole system: daily sheets, habit tracker, training plan and l
 ${lines.join('\n')}`;
 }
 
+function outlookWeekBlock(outlookWeek) {
+  if (!Array.isArray(outlookWeek) || !outlookWeek.length) return '';
+  const lines = outlookWeek
+    .slice(0, 30)
+    .map(
+      (e) =>
+        `- ${e.date}${e.allDay ? ' (all day)' : ` ${e.start}–${e.end}`} — ${e.subject}`,
+    );
+  return `## The Athlete's REAL Outlook Diary (next 7 days — live from their calendar)
+These are their actual work and life commitments. Treat them as HARD constraints: never suggest training that clashes, plan big sessions on lighter days, and reference them naturally ("you've got BNI Wednesday morning, so the turbo moves to the evening").
+${lines.join('\n')}`;
+}
+
 function diaryEventsBlock(calendarEvents) {
   if (!Array.isArray(calendarEvents) || !calendarEvents.length) return '';
   const today = todayIso();
@@ -369,6 +382,7 @@ export function buildAthleteContext({
   daily,
   habits,
   calendarEvents,
+  outlookWeek,
 }) {
   const blocks = [
     dateBlock(),
@@ -380,6 +394,7 @@ export function buildAthleteContext({
     dailySheetsBlock(daily),
     planTextBlock(planText),
     scheduleBlock(schedule),
+    outlookWeekBlock(outlookWeek),
     diaryEventsBlock(calendarEvents),
     milestonesBlock(milestones),
     logBlock(log),

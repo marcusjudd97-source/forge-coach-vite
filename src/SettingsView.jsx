@@ -4,6 +4,7 @@ import { COACHES, COACH_ORDER } from './coaches.js';
 import {
   Section,
   Field,
+  TextInput,
   TextArea,
   GoldButton,
   GhostButton,
@@ -11,6 +12,7 @@ import {
   ViewBody,
 } from './ui.jsx';
 import AccountSync from './AccountSync.jsx';
+import OutlookConnect from './OutlookConnect.jsx';
 
 export default function SettingsView({
   voiceNotes,
@@ -158,6 +160,8 @@ export default function SettingsView({
       <ViewHeader title="SETTINGS" subtitle="Account, voice, backup, and key management." />
       <ViewBody>
         <AccountSync />
+
+        <OutlookConnect />
 
         <Section title="North-star goals">
           <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 14, lineHeight: 1.5 }}>
