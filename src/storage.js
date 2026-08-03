@@ -10,6 +10,36 @@ const KEYS = {
   milestones: 'forge_milestones',
 };
 
+// Keys that sync to the cloud when signed in (everything except the API key,
+// which never leaves this browser).
+export const SYNC_STORAGE_KEYS = Object.values(KEYS).filter((k) => k !== KEYS.apiKey);
+
+const META_KEY = 'forge_sync_meta'; // { [storageKey]: lastLocalWriteMs }
+
+function getMeta() {
+  try {
+    const raw = localStorage.getItem(META_KEY);
+    const m = raw ? JSON.parse(raw) : {};
+    return m && typeof m === 'object' ? m : {};
+  } catch {
+    return {};
+  }
+}
+
+function touchMeta(key, ts) {
+  try {
+    const meta = getMeta();
+    meta[key] = ts;
+    localStorage.setItem(META_KEY, JSON.stringify(meta));
+  } catch {}
+}
+
+// Sync engine registers here to hear about every local write.
+let changeListener = null;
+export function setStorageChangeListener(fn) {
+  changeListener = fn;
+}
+
 function safeGet(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -22,8 +52,42 @@ function safeGet(key, fallback) {
 
 function safeSet(key, value) {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    if (value === null || value === undefined) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
   } catch {}
+  if (SYNC_STORAGE_KEYS.includes(key)) {
+    const ts = Date.now();
+    touchMeta(key, ts);
+    if (changeListener) changeListener(key, value ?? null, ts);
+  }
+}
+
+// Write a value that arrived from the cloud: no listener notification
+// (would echo it straight back up), and the meta timestamp is the remote one.
+export function applyRemoteValue(key, value, ts) {
+  try {
+    if (value === null || value === undefined) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+  } catch {}
+  touchMeta(key, ts);
+}
+
+// Per-key {value, ts} view used by the sync engine to merge against the cloud.
+// A key that has data but no recorded timestamp (pre-sync install) gets ts=1:
+// old enough that any cloud copy wins, but still pushed if the cloud is empty.
+export function getSyncSnapshot() {
+  const meta = getMeta();
+  return SYNC_STORAGE_KEYS.map((key) => {
+    const value = safeGet(key, null);
+    const ts = meta[key] || (value != null ? 1 : 0);
+    return { key, value, ts };
+  });
 }
 
 export const defaultProfile = {
@@ -235,9 +299,7 @@ export const storage = {
   resetAll() {
     Object.values(KEYS).forEach((k) => {
       if (k === KEYS.apiKey) return;
-      try {
-        localStorage.removeItem(k);
-      } catch {}
+      safeSet(k, null);
     });
   },
 };

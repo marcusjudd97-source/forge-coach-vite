@@ -10,6 +10,7 @@ import {
   ViewHeader,
   ViewBody,
 } from './ui.jsx';
+import AccountSync from './AccountSync.jsx';
 
 export default function SettingsView({
   voiceNotes,
@@ -118,8 +119,10 @@ export default function SettingsView({
 
   return (
     <>
-      <ViewHeader title="SETTINGS" subtitle="Voice, backup, and key management." />
+      <ViewHeader title="SETTINGS" subtitle="Account, voice, backup, and key management." />
       <ViewBody>
+        <AccountSync />
+
         <Section title="Coach voice notes">
           <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 14, lineHeight: 1.5 }}>
             Free-text instructions that get injected into each coach's system prompt. Use this to tune

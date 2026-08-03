@@ -8,6 +8,7 @@ import LogView from './LogView.jsx';
 import SettingsView from './SettingsView.jsx';
 import { COACHES, COACH_ORDER } from './coaches.js';
 import { storage, addDays, DAY_ORDER } from './storage.js';
+import { initSync } from './sync.js';
 
 const MOBILE_BREAKPOINT = 640;
 
@@ -356,6 +357,13 @@ export default function App() {
     }
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    // No-op unless Supabase is configured. When newer cloud data is applied
+    // to localStorage, re-read everything into React state.
+    initSync({ onRemoteApplied: handleDataImported });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!apiKey) {

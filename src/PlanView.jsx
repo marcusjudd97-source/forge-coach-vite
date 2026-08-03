@@ -19,6 +19,7 @@ import {
   ViewBody,
 } from './ui.jsx';
 import QuickLog from './QuickLog.jsx';
+import { outlookEventUrl, buildScheduleIcs, downloadIcs, upcomingSessionDates } from './calendar.js';
 
 const HORIZON_DAYS = 14;
 
@@ -315,6 +316,14 @@ export default function PlanView({
           {!editingDate && session && (
             <GhostButton onClick={() => startEdit(date)}>Edit session</GhostButton>
           )}
+          {session && (
+            <GhostButton
+              onClick={() => window.open(outlookEventUrl(date, session), '_blank', 'noopener')}
+              style={{ color: 'var(--text-mid)' }}
+            >
+              📅 Outlook
+            </GhostButton>
+          )}
         </div>
       </div>
     );
@@ -322,6 +331,12 @@ export default function PlanView({
 
   const heroDate = today;
   const restDates = dates.slice(1);
+  const upcomingCount = upcomingSessionDates(schedule).length;
+
+  function exportCalendar() {
+    const ics = buildScheduleIcs(schedule);
+    downloadIcs(`forge-sessions-${today}.ics`, ics);
+  }
 
   return (
     <>
@@ -336,6 +351,12 @@ export default function PlanView({
       />
       <ViewBody>
         <DayCard date={heroDate} isHero />
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '2px 0 12px' }}>
+          <GhostButton onClick={exportCalendar} disabled={!upcomingCount}>
+            📅 ADD ALL TO CALENDAR{upcomingCount ? ` (${upcomingCount})` : ''}
+          </GhostButton>
+        </div>
 
         <Section title="What's coming">
           {restDates.map((d) => (
