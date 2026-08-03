@@ -5,6 +5,7 @@ import HomeView from './HomeView.jsx';
 import PlanView from './PlanView.jsx';
 import DayView from './DayView.jsx';
 import HabitsView from './HabitsView.jsx';
+import FoodView from './FoodView.jsx';
 import ProfileView from './ProfileView.jsx';
 import LogView from './LogView.jsx';
 import SettingsView from './SettingsView.jsx';
@@ -19,6 +20,7 @@ const NAV = [
   { id: 'home', label: 'Home', icon: '🏠' },
   { id: 'day', label: 'Day', icon: '☀️' },
   { id: 'plan', label: 'Plan', icon: '📋' },
+  { id: 'food', label: 'Food', icon: '🥗' },
   { id: 'coaches', label: 'Coaches', icon: '💬' },
   { id: 'profile', label: 'Profile', icon: '👤' },
 ];
@@ -28,6 +30,7 @@ const DESKTOP_NAV = [
   { id: 'day', label: 'Day', icon: '☀️' },
   { id: 'habits', label: 'Habits', icon: '✅' },
   { id: 'plan', label: 'Plan', icon: '📋' },
+  { id: 'food', label: 'Food', icon: '🥗' },
   { id: 'coaches', label: 'Coaches', icon: '💬' },
   { id: 'log', label: 'Log (history)', icon: '📊' },
   { id: 'profile', label: 'Profile', icon: '👤' },
@@ -355,6 +358,7 @@ export default function App() {
   const [daily, setDaily] = useState(() => storage.getDaily());
   const [habits, setHabits] = useState(() => storage.getHabits());
   const [calendarEvents, setCalendarEvents] = useState(() => storage.getCalendarEvents());
+  const [foodPlan, setFoodPlan] = useState(() => storage.getFoodPlan());
   const [outlookWeek, setOutlookWeek] = useState(null);
 
   const [view, setView] = useState('home');
@@ -454,6 +458,7 @@ export default function App() {
     setDaily(storage.getDaily());
     setHabits(storage.getHabits());
     setCalendarEvents(storage.getCalendarEvents());
+    setFoodPlan(storage.getFoodPlan());
   }
 
   function applyWeekPlan(parsed) {
@@ -492,6 +497,14 @@ export default function App() {
     storage.setAffirmations(parsed);
     setAffirmations(parsed);
     window.alert(`Saved ${parsed.length} affirmations — they're now on your Day sheet every morning and evening.`);
+  }
+
+  function applyFoodWeek(parsed) {
+    if (!parsed || !Object.keys(parsed).length) return;
+    const next = { ...storage.getFoodPlan(), ...parsed };
+    storage.setFoodPlan(next);
+    setFoodPlan(next);
+    window.alert(`Food plan filled for ${Object.keys(parsed).length} day${Object.keys(parsed).length === 1 ? '' : 's'} — see the Food tab.`);
   }
 
   function addCalendarEvents(fresh) {
@@ -637,6 +650,7 @@ export default function App() {
         onDailyChange={setDaily}
         schedule={schedule}
         habits={habits}
+        foodPlan={foodPlan}
         onGoTo={(v) => setView(v)}
         onOpenCoach={openCoach}
       />
@@ -645,6 +659,16 @@ export default function App() {
   } else if (view === 'habits') {
     body = <HabitsView habits={habits} onHabitsChange={setHabits} daily={daily} />;
     mobileTitle = 'HABITS';
+  } else if (view === 'food') {
+    body = (
+      <FoodView
+        foodPlan={foodPlan}
+        onFoodPlanChange={setFoodPlan}
+        schedule={schedule}
+        onAskPetra={() => openCoach('nutrition')}
+      />
+    );
+    mobileTitle = 'FOOD';
   } else if (view === 'plan') {
     body = (
       <PlanView
@@ -754,10 +778,12 @@ export default function App() {
             daily={daily}
             habits={habits}
             calendarEvents={calendarEvents}
+            foodPlan={foodPlan}
             outlookWeek={outlookWeek}
             onAddCalendarEvents={addCalendarEvents}
             onSavePlanFromMessage={savePlanFromMessage}
             onApplyWeekPlan={applyWeekPlan}
+            onApplyFoodWeek={applyFoodWeek}
             onApplyMilestones={applyMilestones}
             onApplyProfileUpdates={applyProfileUpdates}
             onApplyAffirmations={applyAffirmations}

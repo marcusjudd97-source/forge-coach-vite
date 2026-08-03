@@ -13,6 +13,7 @@ const KEYS = {
   daily: 'forge_daily',
   habits: 'forge_habits',
   calendarEvents: 'forge_calendar_events',
+  foodPlan: 'forge_food_plan',
 };
 
 // Keys that sync to the cloud when signed in (everything except the API key,
@@ -368,6 +369,15 @@ export const storage = {
   },
   setCalendarEvents(e) {
     safeSet(KEYS.calendarEvents, e);
+  },
+
+  // { [dateIso]: { breakfast, lunch, dinner, snacks, note } }
+  getFoodPlan() {
+    const f = safeGet(KEYS.foodPlan, {});
+    return f && typeof f === 'object' ? f : {};
+  },
+  setFoodPlan(f) {
+    safeSet(KEYS.foodPlan, f);
   },
 
   getHabits() {

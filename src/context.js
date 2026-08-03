@@ -323,6 +323,28 @@ You can see their whole system: daily sheets, habit tracker, training plan and l
 ${lines.join('\n')}`;
 }
 
+function foodPlanBlock(foodPlan) {
+  if (!foodPlan || typeof foodPlan !== 'object') return '';
+  const today = todayIso();
+  const lines = [];
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(today, i);
+    const day = foodPlan[d];
+    if (!day) continue;
+    const bits = [
+      day.breakfast && `B: ${day.breakfast}`,
+      day.lunch && `L: ${day.lunch}`,
+      day.dinner && `D: ${day.dinner}`,
+      day.snacks && `S: ${day.snacks}`,
+      day.note && `note: ${day.note}`,
+    ].filter(Boolean);
+    if (bits.length) lines.push(`- **${d === today ? 'Today' : d}** — ${bits.join(' · ')}`);
+  }
+  if (!lines.length) return '';
+  return `## Current Food Plan (next 7 days — on the athlete's Food tab)
+${lines.join('\n')}`;
+}
+
 function outlookWeekBlock(outlookWeek) {
   if (!Array.isArray(outlookWeek) || !outlookWeek.length) return '';
   const lines = outlookWeek
@@ -382,6 +404,7 @@ export function buildAthleteContext({
   daily,
   habits,
   calendarEvents,
+  foodPlan,
   outlookWeek,
 }) {
   const blocks = [
@@ -396,6 +419,7 @@ export function buildAthleteContext({
     scheduleBlock(schedule),
     outlookWeekBlock(outlookWeek),
     diaryEventsBlock(calendarEvents),
+    foodPlanBlock(foodPlan),
     milestonesBlock(milestones),
     logBlock(log),
     voiceBlock(voiceNote),

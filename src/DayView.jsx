@@ -298,6 +298,7 @@ export default function DayView({
   onDailyChange,
   schedule,
   habits,
+  foodPlan,
   onGoTo,
   onOpenCoach,
 }) {
@@ -355,8 +356,16 @@ export default function DayView({
   const streak = streakCount(daily);
   const m = sheet.morning;
   const e = sheet.evening;
-  // Food planned on the previous evening feeds this morning's sheet
-  const plannedFood = daily?.[addDays(date, -1)]?.evening || {};
+  // Today's food: the Food tab plan wins; falls back to what was written on
+  // the previous evening's sheet.
+  const prevEvening = daily?.[addDays(date, -1)]?.evening || {};
+  const foodDay = foodPlan?.[date] || {};
+  const plannedFood = {
+    foodBreakfast: foodDay.breakfast || prevEvening.foodBreakfast || '',
+    foodLunch: foodDay.lunch || prevEvening.foodLunch || '',
+    foodDinner: foodDay.dinner || prevEvening.foodDinner || '',
+    foodNote: foodDay.note || '',
+  };
   const hasPlannedFood = !!(plannedFood.foodBreakfast || plannedFood.foodLunch || plannedFood.foodDinner);
   const cue = mindsetCueFor(date);
 
@@ -518,6 +527,11 @@ export default function DayView({
                   {plannedFood.foodBreakfast && <div><span style={{ color: 'var(--text-dim)' }}>Breakfast:</span> {plannedFood.foodBreakfast}</div>}
                   {plannedFood.foodLunch && <div><span style={{ color: 'var(--text-dim)' }}>Lunch:</span> {plannedFood.foodLunch}</div>}
                   {plannedFood.foodDinner && <div><span style={{ color: 'var(--text-dim)' }}>Dinner:</span> {plannedFood.foodDinner}</div>}
+                  {plannedFood.foodNote && (
+                    <div style={{ marginTop: 4, fontStyle: 'italic', color: 'var(--text-mid)', fontSize: 13 }}>
+                      📝 {plannedFood.foodNote}
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -6,6 +6,7 @@ const PROFILE_BLOCK_RE = /<<<\s*FORGE-PROFILE\s*([\s\S]*?)>>>/i;
 const DIARY_BLOCK_RE = /<<<\s*FORGE-DIARY\s*([\s\S]*?)>>>/i;
 const AFFIRM_BLOCK_RE = /<<<\s*FORGE-AFFIRMATIONS\s*([\s\S]*?)>>>/i;
 const HABITS_BLOCK_RE = /<<<\s*FORGE-HABITS\s*([\s\S]*?)>>>/i;
+const FOODWEEK_BLOCK_RE = /<<<\s*FORGE-FOODWEEK\s*([\s\S]*?)>>>/i;
 
 export function hasWeekBlock(text) {
   return typeof text === 'string' && WEEK_BLOCK_RE.test(text);
@@ -38,7 +39,30 @@ export function hasHabitsBlock(text) {
   return typeof text === 'string' && HABITS_BLOCK_RE.test(text);
 }
 
-// Lines: - Name | morning/evening/any | check/count/number | target | unit
+// Days spec like "mon,tue,fri", "mon-sat" or "daily" → JS weekday numbers
+// (0 = Sunday). Returns null for daily/unparseable, meaning every day.
+const DAY_NUM = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+const DAY_SEQ = [1, 2, 3, 4, 5, 6, 0]; // Mon → Sun
+function parseDaysSpec(spec) {
+  const s = (spec || '').toLowerCase().trim();
+  if (!s || s === 'daily' || s === 'everyday' || s === 'every day') return null;
+  const days = new Set();
+  for (const token of s.split(/[,\s]+/).filter(Boolean)) {
+    const range = token.match(/^([a-z]{3,})-([a-z]{3,})$/);
+    if (range) {
+      const from = DAY_SEQ.indexOf(DAY_NUM[range[1].slice(0, 3)]);
+      const to = DAY_SEQ.indexOf(DAY_NUM[range[2].slice(0, 3)]);
+      if (from === -1 || to === -1) continue;
+      for (let i = from; i !== to; i = (i + 1) % 7) days.add(DAY_SEQ[i]);
+      days.add(DAY_SEQ[to]);
+    } else if (DAY_NUM[token.slice(0, 3)] !== undefined) {
+      days.add(DAY_NUM[token.slice(0, 3)]);
+    }
+  }
+  return days.size > 0 && days.size < 7 ? [...days] : null;
+}
+
+// Lines: - Name | morning/evening/any | check/count/number | target | unit | days
 export function parseHabitsBlock(text) {
   if (!text) return null;
   const match = text.match(HABITS_BLOCK_RE);
@@ -51,22 +75,53 @@ export function parseHabitsBlock(text) {
   for (const raw of lines) {
     const parts = raw.replace(/^[-*•]\s*/, '').split('|').map((p) => p.trim());
     if (parts.length < 2 || !parts[0]) continue;
-    const [name, whenRaw, typeRaw, targetRaw, unitRaw] = parts;
+    const [name, whenRaw, typeRaw, targetRaw, unitRaw, daysRaw] = parts;
     const when = ['morning', 'evening', 'any'].includes((whenRaw || '').toLowerCase())
       ? whenRaw.toLowerCase()
       : 'any';
     const type = ['check', 'count', 'number'].includes((typeRaw || '').toLowerCase())
       ? typeRaw.toLowerCase()
       : 'check';
+    const days = parseDaysSpec(daysRaw);
     habits.push({
       name,
       when,
       type,
       target: Number(targetRaw) || 0,
       unit: (unitRaw || '').trim(),
+      ...(days ? { days } : {}),
     });
   }
   return habits.length ? habits : null;
+}
+
+export function hasFoodWeekBlock(text) {
+  return typeof text === 'string' && FOODWEEK_BLOCK_RE.test(text);
+}
+
+// Lines: - YYYY-MM-DD | B: … | L: … | D: … | S: … | N: prep/timing note
+export function parseFoodWeekBlock(text) {
+  if (!text) return null;
+  const match = text.match(FOODWEEK_BLOCK_RE);
+  if (!match) return null;
+  const lines = match[1]
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && l !== '-');
+  const plan = {};
+  const FIELD = { b: 'breakfast', l: 'lunch', d: 'dinner', s: 'snacks', n: 'note' };
+  for (const raw of lines) {
+    const parts = raw.replace(/^[-*•]\s*/, '').split('|').map((p) => p.trim());
+    const date = parts.shift();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) continue;
+    const day = {};
+    for (const seg of parts) {
+      const m = seg.match(/^([BLDSN])\s*:\s*(.+)$/i);
+      if (m) day[FIELD[m[1].toLowerCase()]] = m[2].trim();
+    }
+    if (Object.keys(day).length) plan[date] = day;
+  }
+  return Object.keys(plan).length ? plan : null;
 }
 
 // Fallback for replies truncated mid-block: open marker but no closing >>>
@@ -213,6 +268,7 @@ export function stripForgeBlocks(text) {
     .replace(DIARY_BLOCK_RE, '')
     .replace(AFFIRM_BLOCK_RE, '')
     .replace(HABITS_BLOCK_RE, '')
+    .replace(FOODWEEK_BLOCK_RE, '')
     .replace(DIARY_BLOCK_OPEN_RE, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

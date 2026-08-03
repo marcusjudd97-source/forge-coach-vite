@@ -7,12 +7,14 @@ import {
   hasDiaryBlock,
   hasAffirmationsBlock,
   hasHabitsBlock,
+  hasFoodWeekBlock,
   parseWeekBlock,
   parseMilestonesBlock,
   parseProfileBlock,
   parseDiaryBlock,
   parseAffirmationsBlock,
   parseHabitsBlock,
+  parseFoodWeekBlock,
   stripForgeBlocks,
 } from './parsers.js';
 import { buildEventsIcs, downloadIcs } from './calendar.js';
@@ -129,10 +131,12 @@ export default function ChatWindow({
   daily,
   habits,
   calendarEvents,
+  foodPlan,
   outlookWeek,
   onAddCalendarEvents,
   onSavePlanFromMessage,
   onApplyWeekPlan,
+  onApplyFoodWeek,
   onApplyMilestones,
   onApplyProfileUpdates,
   onApplyAffirmations,
@@ -229,6 +233,7 @@ export default function ChatWindow({
       daily,
       habits,
       calendarEvents,
+      foodPlan,
       outlookWeek,
     });
     return buildSystemPrompt(coach.systemPrompt, ctx);
@@ -464,6 +469,7 @@ export default function ChatWindow({
   const showDiaryBtn = !!lastDiaryContent;
   const showAffirmationsBtn = hasAffirmationsBlock(lastAssistantContent);
   const showHabitsBtn = hasHabitsBlock(lastAssistantContent);
+  const showFoodWeekBtn = hasFoodWeekBlock(lastAssistantContent);
 
   return (
     <div
@@ -527,6 +533,27 @@ export default function ChatWindow({
               }}
             >
               APPLY MILESTONES
+            </button>
+          )}
+          {showFoodWeekBtn && onApplyFoodWeek && (
+            <button
+              onClick={() => {
+                const parsed = parseFoodWeekBlock(lastAssistantContent);
+                if (parsed) onApplyFoodWeek(parsed);
+              }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                background: coach.accentDim,
+                border: `1px solid ${coach.accentBorder}`,
+                color: coach.accentColor,
+                fontFamily: 'var(--font-display)',
+                fontSize: 11,
+                letterSpacing: '0.18em',
+                cursor: 'pointer',
+              }}
+            >
+              🥗 FILL FOOD TAB
             </button>
           )}
           {showHabitsBtn && onApplyHabits && (
