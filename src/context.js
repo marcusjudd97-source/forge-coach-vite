@@ -186,8 +186,21 @@ function dateBlock() {
     ? 'It is late in the week, so "this week" from the athlete typically means next week (the week starting on the next Monday). Confirm with them if ambiguous.'
     : 'It is early/mid week, so "this week" from the athlete means the current calendar week (the one already in progress).';
 
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  let tz = '';
+  try {
+    tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    tz = '';
+  }
+  const hour = now.getHours();
+  const partOfDay =
+    hour < 5 ? 'night' : hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : hour < 21 ? 'evening' : 'night';
+
   return `## Today
 - Today is **${weekday}, ${iso}**.
+- The athlete's local time right now is **${hh}:${mm}**${tz ? ` (${tz})` : ''} — ${weekday} ${partOfDay}. Factor this in: what's still realistic today, whether a session is ahead of or behind them, meal/sleep timing, and greetings.
 - **Current week's Monday:** ${currentMondayIso} (the week already in progress).
 - **Next week's Monday:** ${nextMondayIso}.
 - **Default \`weekStarts\` for "this week":** ${defaultWeekStarts}.
