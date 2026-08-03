@@ -213,38 +213,45 @@ export const defaultAffirmations = [
   'I am a business owner and I take charge of my business and where it is heading',
 ];
 
-// Habit: { id, name, type: 'check' | 'count' | 'number', target, unit }
+// Habit: { id, name, type: 'check' | 'count' | 'number', target, unit, when }
 // - check: done/not done (target/unit unused)
 // - count: times per day, done when value >= target (e.g. 2x water bottles)
 // - number: free number with a unit (£, min, pages); done when value >= target,
 //   or when any value is entered if no target is set
+// - when: 'morning' | 'evening' | 'any' — which daily form it appears on
 export const defaultHabits = [
-  { id: 'h1', name: 'Up before everyone else', type: 'check', target: 0, unit: '' },
-  { id: 'h2', name: '15 min towards a goal', type: 'check', target: 0, unit: '' },
+  { id: 'h1', name: 'Up before everyone else', type: 'check', target: 0, unit: '', when: 'morning' },
+  { id: 'h2', name: '15 min towards a goal', type: 'check', target: 0, unit: '', when: 'any' },
 ];
 
 export const emptyDaySheet = () => ({
   habits: {},
   morning: {
     affirmationsRead: false,
+    gratitude1: '',
+    gratitude2: '',
+    gratitude3: '',
     focus: '',
     action15: '',
     todos: '',
-    budgetNote: '',
+    balance: '',
+    savedAt: '',
   },
   evening: {
+    affirmationsRead: false,
+    gratitude1: '',
+    gratitude2: '',
+    gratitude3: '',
     wentWell: '',
     doBetter: '',
     learned: '',
     review: '',
-    gratitude1: '',
-    gratitude2: '',
-    gratitude3: '',
-    habitsDone: false,
+    foodBreakfast: '',
+    foodLunch: '',
+    foodDinner: '',
     tomorrowPlanned: false,
-    affirmationsRead: false,
+    savedAt: '',
   },
-  journal: '',
 });
 
 export const emptyLogEntry = () => ({

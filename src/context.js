@@ -228,6 +228,21 @@ function affirmationsBlock(affirmations) {
 ${affirmations.map((a) => `- ${a}`).join('\n')}`;
 }
 
+function sheetMorningDone(s) {
+  return !!(s?.morning?.savedAt || (s?.morning?.affirmationsRead && (s?.morning?.focus || '').trim()));
+}
+function sheetEveningDone(s) {
+  return !!(s?.evening?.savedAt || ((s?.evening?.wentWell || '').trim() && (s?.evening?.gratitude1 || '').trim()));
+}
+function ctxHabitDone(habit, value) {
+  if (!habit) return false;
+  if (habit.type === 'check') return value === true;
+  const n = Number(value) || 0;
+  if (habit.type === 'count') return n >= Math.max(1, Number(habit.target) || 1);
+  const target = Number(habit.target) || 0;
+  return target > 0 ? n >= target : n > 0;
+}
+
 function dailySheetsBlock(daily) {
   if (!daily || typeof daily !== 'object') return '';
   const today = todayIso();
@@ -239,16 +254,72 @@ function dailySheetsBlock(daily) {
     const bits = [];
     if (s.morning?.focus) bits.push(`focus: ${s.morning.focus}`);
     if (s.morning?.action15) bits.push(`15-min goal action: ${s.morning.action15}`);
+    if (s.morning?.balance) bits.push(`account balance noted: ${s.morning.balance}`);
     if (s.evening?.wentWell) bits.push(`went well: ${s.evening.wentWell}`);
     if (s.evening?.doBetter) bits.push(`do better: ${s.evening.doBetter}`);
     if (s.evening?.learned) bits.push(`learned: ${s.evening.learned}`);
     const grats = [s.evening?.gratitude1, s.evening?.gratitude2, s.evening?.gratitude3].filter(Boolean);
     if (grats.length) bits.push(`grateful for: ${grats.join('; ')}`);
+    const food = [s.evening?.foodBreakfast && `B: ${s.evening.foodBreakfast}`, s.evening?.foodLunch && `L: ${s.evening.foodLunch}`, s.evening?.foodDinner && `D: ${s.evening.foodDinner}`].filter(Boolean);
+    if (food.length) bits.push(`food planned for next day — ${food.join(', ')}`);
     if (!bits.length) continue;
     lines.push(`- **${d === today ? 'Today' : d}** — ${bits.join(' · ')}`);
   }
   if (!lines.length) return '';
   return `## Daily Sheets (last 3 days — the athlete's own words)
+${lines.join('\n')}`;
+}
+
+function accountabilityBlock({ daily, habits, schedule, log }) {
+  const today = todayIso();
+  const last7 = [];
+  for (let i = 6; i >= 0; i--) last7.push(addDays(today, -i));
+
+  const lines = [];
+
+  // Daily sheet completion
+  if (daily && typeof daily === 'object') {
+    const mMissed = [];
+    const eMissed = [];
+    let mDone = 0;
+    let eDone = 0;
+    for (const d of last7) {
+      const s = daily[d];
+      if (sheetMorningDone(s)) mDone++;
+      else if (d !== today) mMissed.push(d);
+      if (sheetEveningDone(s)) eDone++;
+      else if (d !== today) eMissed.push(d);
+    }
+    lines.push(`- Morning sheets done ${mDone}/7${mMissed.length ? ` — missed: ${mMissed.join(', ')}` : ''}. Evening sheets done ${eDone}/7${eMissed.length ? ` — missed: ${eMissed.join(', ')}` : ''}.`);
+    const todaySheet = daily[today];
+    lines.push(`- Today so far: morning sheet ${sheetMorningDone(todaySheet) ? 'DONE' : 'NOT done yet'}, evening sheet ${sheetEveningDone(todaySheet) ? 'DONE' : 'not done yet'}.`);
+  }
+
+  // Habit compliance
+  if (Array.isArray(habits) && habits.length && daily) {
+    for (const h of habits) {
+      const doneDays = last7.filter((d) => ctxHabitDone(h, daily[d]?.habits?.[h.id])).length;
+      const todayDone = ctxHabitDone(h, daily[today]?.habits?.[h.id]);
+      lines.push(`- Habit "${h.name}" (${h.when || 'any'}): ${doneDays}/7 this week, today ${todayDone ? 'done' : 'NOT done'}.`);
+    }
+  }
+
+  // Planned sessions never logged
+  if (schedule && Array.isArray(log)) {
+    const loggedDates = new Set(log.map((e) => e.date));
+    const unlogged = last7
+      .filter((d) => d !== today)
+      .filter((d) => (schedule[d]?.session || '').trim() && !loggedDates.has(d));
+    if (unlogged.length) {
+      lines.push(`- ⚠️ Sessions PLANNED but NEVER LOGGED (did they happen?): ${unlogged.map((d) => `${d} (${(schedule[d].session || '').split('\n')[0].slice(0, 40)})`).join('; ')}.`);
+    } else {
+      lines.push('- Every planned session in the last 7 days has a log entry. Credit where due.');
+    }
+  }
+
+  if (!lines.length) return '';
+  return `## Accountability — What The Athlete Is And Isn't Doing (last 7 days)
+You can see their whole system: daily sheets, habit tracker, training plan and log. The athlete has EXPLICITLY asked to be held accountable without having to chase it. So: if something above shows slipping — missed sheets, a habit falling off, planned sessions never logged — RAISE IT YOURSELF early in your reply, by name, kindly but directly ("I can see Tuesday's swim never got logged — did it happen?"). Never pretend not to see it. Praise real streaks specifically. Don't lecture; one clean nudge per gap, then coach.
 ${lines.join('\n')}`;
 }
 
@@ -279,6 +350,7 @@ export function buildAthleteContext({
   goals,
   affirmations,
   daily,
+  habits,
 }) {
   const blocks = [
     dateBlock(),
@@ -286,6 +358,7 @@ export function buildAthleteContext({
     countdownBlock(profile),
     profileBlock(profile),
     affirmationsBlock(affirmations),
+    accountabilityBlock({ daily, habits, schedule, log }),
     dailySheetsBlock(daily),
     planTextBlock(planText),
     scheduleBlock(schedule),

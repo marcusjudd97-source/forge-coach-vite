@@ -7,16 +7,6 @@ function hasMasterPlan(planText) {
   return !!(planText && planText.trim().length > 40);
 }
 
-function hasScheduleSet(schedule) {
-  if (!schedule) return false;
-  const today = todayIso();
-  for (let i = 0; i < 7; i++) {
-    const d = addDays(today, i);
-    if (schedule[d]?.session?.trim()) return true;
-  }
-  return false;
-}
-
 function summariseLog(log) {
   if (!log.length) return null;
   const last7 = log.filter((e) => {
@@ -278,21 +268,6 @@ export default function HomeView({
                 TALK TO KIRA →
               </GoldButton>
               <GhostButton onClick={() => onGoTo('plan')}>OPEN PLAN EDITOR</GhostButton>
-            </div>
-          </Section>
-        )}
-
-        {profileFilled && hasMasterPlan(planText) && !hasScheduleSet(schedule) && (
-          <Section title="Next step — this week">
-            <div style={{ color: 'var(--text-mid)', marginBottom: 14, fontSize: 15 }}>
-              Master plan is saved. Ask Kira to write this week's 7 sessions — she'll read your profile,
-              your master plan and the last 10 log entries, then auto-fill your Plan tab.
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <GoldButton onClick={() => onOpenCoach('headCoach')}>
-                TALK TO KIRA →
-              </GoldButton>
-              <GhostButton onClick={() => onGoTo('plan')}>EDIT WEEK MANUALLY</GhostButton>
             </div>
           </Section>
         )}

@@ -124,6 +124,7 @@ export default function ChatWindow({
   goals,
   affirmations,
   daily,
+  habits,
   onSavePlanFromMessage,
   onApplyWeekPlan,
   onApplyMilestones,
@@ -176,6 +177,7 @@ export default function ChatWindow({
       goals,
       affirmations,
       daily,
+      habits,
     });
     return buildSystemPrompt(coach.systemPrompt, ctx);
   }

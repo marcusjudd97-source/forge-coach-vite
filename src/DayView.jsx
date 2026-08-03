@@ -12,7 +12,6 @@ import {
   Field,
   TextInput,
   TextArea,
-  Select,
   GoldButton,
   GhostButton,
   ViewHeader,
@@ -25,8 +24,32 @@ function mergeSheet(stored) {
     habits: { ...(stored?.habits || {}) },
     morning: { ...empty.morning, ...(stored?.morning || {}) },
     evening: { ...empty.evening, ...(stored?.evening || {}) },
-    journal: stored?.journal || '',
   };
+}
+
+export function morningDone(sheet) {
+  return !!(
+    sheet?.morning?.savedAt ||
+    (sheet?.morning?.affirmationsRead && (sheet?.morning?.focus || '').trim())
+  );
+}
+
+export function eveningDone(sheet) {
+  return !!(
+    sheet?.evening?.savedAt ||
+    ((sheet?.evening?.wentWell || '').trim() && (sheet?.evening?.gratitude1 || '').trim())
+  );
+}
+
+export function streakCount(daily) {
+  let d = todayIso();
+  if (!eveningDone(daily?.[d])) d = addDays(d, -1);
+  let n = 0;
+  while (eveningDone(daily?.[d])) {
+    n += 1;
+    d = addDays(d, -1);
+  }
+  return n;
 }
 
 export function habitDone(habit, value) {
@@ -49,27 +72,27 @@ export function habitStreak(habit, daily) {
   return n;
 }
 
-export function morningDone(sheet) {
-  return !!(sheet?.morning?.affirmationsRead && (sheet.morning.focus || '').trim());
-}
+// Mindset cue of the day — Soren's rotation. One per day, deterministic.
+const MINDSET_CUES = [
+  'Process over outcome. Win the next hour, not the whole year.',
+  "Discipline is remembering what you want. Read your three goals again — slowly.",
+  'You don\'t rise to your goals, you fall to your systems. Run the system today.',
+  'Hard conversations early. The thing you\'re avoiding is the day\'s real workout.',
+  'Compare yourself only to yesterday\'s version of you.',
+  'Energy follows attention. Put your attention on the one thing that moves a goal.',
+  'Act like the person in your affirmations for one full day. That\'s all it takes — repeated.',
+  'Slow is smooth, smooth is fast. No frantic work today.',
+  'The 3am fear shrinks when the 6am work gets done.',
+  'Nobody is coming. Good — you\'ve got you, and you show up daily.',
+  'Today\'s boredom is compounding interest on your goals. Stay in it.',
+  'Champions feel like skipping it too. They just don\'t.',
+  'Protect the morning. The world can have the afternoon.',
+  'One good decision at a time. Stack ten before lunch.',
+];
 
-export function eveningDone(sheet) {
-  return !!(
-    (sheet?.evening?.wentWell || '').trim() && (sheet?.evening?.gratitude1 || '').trim()
-  );
-}
-
-export function streakCount(daily) {
-  // consecutive completed evenings, counting back from today (or yesterday if
-  // today's evening isn't done yet — an unfinished today shouldn't kill it)
-  let d = todayIso();
-  if (!eveningDone(daily?.[d])) d = addDays(d, -1);
-  let n = 0;
-  while (eveningDone(daily?.[d])) {
-    n += 1;
-    d = addDays(d, -1);
-  }
-  return n;
+function mindsetCueFor(dateIso) {
+  const n = dateIso.split('-').reduce((a, b) => a + Number(b), 0);
+  return MINDSET_CUES[n % MINDSET_CUES.length];
 }
 
 function Check({ checked, onChange, label }) {
@@ -112,22 +135,144 @@ function Check({ checked, onChange, label }) {
   );
 }
 
-function DoneBadge({ done, label }) {
+function AffirmationsPanel({ affirmations, read, onRead }) {
   return (
-    <span
-      style={{
-        fontFamily: 'var(--font-display)',
-        fontSize: 10,
-        letterSpacing: '0.18em',
-        padding: '3px 10px',
-        borderRadius: 999,
-        background: done ? 'rgba(111, 178, 65, 0.14)' : 'var(--bg3)',
-        border: `1px solid ${done ? 'rgba(111, 178, 65, 0.35)' : 'var(--border)'}`,
-        color: done ? '#6fb241' : 'var(--text-dim)',
-      }}
-    >
-      {label} {done ? '✓' : '○'}
-    </span>
+    <>
+      <div
+        style={{
+          padding: '12px 14px',
+          borderRadius: 12,
+          background: 'rgba(200, 146, 42, 0.06)',
+          border: '1px solid rgba(200, 146, 42, 0.25)',
+          marginBottom: 10,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 11,
+            letterSpacing: '0.22em',
+            color: 'var(--gold)',
+            marginBottom: 8,
+          }}
+        >
+          AFFIRMATIONS — SAY THEM LIKE YOU MEAN THEM
+        </div>
+        {(affirmations || []).map((a, i) => (
+          <div key={i} style={{ fontSize: 15, color: 'var(--text)', lineHeight: 1.7 }}>
+            {a}
+          </div>
+        ))}
+      </div>
+      <Check checked={read} onChange={onRead} label="I've read my affirmations out loud" />
+    </>
+  );
+}
+
+function GratitudePanel({ values, onChange }) {
+  return (
+    <Field label="3 things I'm grateful for">
+      <div style={{ display: 'grid', gap: 8 }}>
+        <TextInput value={values.gratitude1} onChange={(v) => onChange('gratitude1', v)} placeholder="1." />
+        <TextInput value={values.gratitude2} onChange={(v) => onChange('gratitude2', v)} placeholder="2." />
+        <TextInput value={values.gratitude3} onChange={(v) => onChange('gratitude3', v)} placeholder="3." />
+      </div>
+    </Field>
+  );
+}
+
+function HabitList({ habits, when, sheet, daily, onValue }) {
+  const list = (habits || []).filter((h) => (h.when || 'any') === when || (h.when || 'any') === 'any');
+  if (!list.length) return null;
+  return (
+    <div>
+      <div
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 11,
+          letterSpacing: '0.22em',
+          color: 'var(--text-dim)',
+          marginBottom: 8,
+        }}
+      >
+        HABITS
+      </div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {list.map((h) => {
+          const val = sheet.habits[h.id];
+          const done = habitDone(h, val);
+          const streakN = habitStreak(h, daily);
+          const step = h.type === 'count' ? 1 : Number(h.target) ? Math.ceil(Number(h.target) / 4) : 1;
+          const targetLabel =
+            h.type === 'count'
+              ? `${Number(val) || 0}/${Math.max(1, Number(h.target) || 1)}`
+              : h.type === 'number'
+                ? `${h.unit || ''}${Number(val) || 0}${h.target ? ` / ${h.unit || ''}${h.target}` : ''}`
+                : '';
+          return (
+            <div
+              key={h.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '10px 12px',
+                borderRadius: 10,
+                background: done ? 'rgba(111, 178, 65, 0.1)' : 'var(--bg3)',
+                border: `1px solid ${done ? 'rgba(111, 178, 65, 0.35)' : 'var(--border)'}`,
+              }}
+            >
+              {h.type === 'check' ? (
+                <button
+                  onClick={() => onValue(h.id, !val)}
+                  style={{
+                    flexShrink: 0,
+                    width: 26,
+                    height: 26,
+                    borderRadius: 8,
+                    border: `1.5px solid ${done ? '#6fb241' : 'var(--border)'}`,
+                    background: done ? 'rgba(111, 178, 65, 0.25)' : 'transparent',
+                    color: '#6fb241',
+                    cursor: 'pointer',
+                    fontSize: 15,
+                  }}
+                >
+                  {done ? '✓' : ''}
+                </button>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <button
+                    onClick={() => onValue(h.id, Math.max(0, (Number(val) || 0) - step))}
+                    style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)', cursor: 'pointer' }}
+                  >
+                    −
+                  </button>
+                  <button
+                    onClick={() => onValue(h.id, (Number(val) || 0) + step)}
+                    style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)', cursor: 'pointer' }}
+                  >
+                    +
+                  </button>
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 15, color: 'var(--text)' }}>{h.name}</span>
+                {targetLabel && (
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 12, letterSpacing: '0.08em', color: done ? '#6fb241' : 'var(--text-mid)', marginLeft: 8 }}>
+                    {targetLabel}
+                  </span>
+                )}
+              </div>
+              {streakN > 0 && (
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 11, letterSpacing: '0.1em', color: 'var(--gold)', flexShrink: 0 }}>
+                  🔥 {streakN}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -138,17 +283,19 @@ export default function DayView({
   onDailyChange,
   schedule,
   habits,
-  onHabitsChange,
+  onGoTo,
+  onOpenCoach,
 }) {
-  const [date, setDate] = useState(todayIso());
+  const today = todayIso();
+  const [date, setDate] = useState(today);
+  // Default to the form that matches the time of day
+  const [part, setPart] = useState(() => (new Date().getHours() < 15 ? 'morning' : 'evening'));
   const [sheet, setSheet] = useState(() => mergeSheet(daily?.[date]));
-  const [manageHabits, setManageHabits] = useState(false);
-  const [newHabit, setNewHabit] = useState({ name: '', type: 'check', target: '', unit: '' });
+  const [justSaved, setJustSaved] = useState('');
   const saveTimer = useRef(null);
   const sheetRef = useRef(sheet);
   sheetRef.current = sheet;
 
-  // Load when navigating between days
   useEffect(() => {
     setSheet(mergeSheet(daily?.[date]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -162,10 +309,7 @@ export default function DayView({
 
   function update(section, key, value) {
     const s = sheetRef.current;
-    const next =
-      section === 'journal'
-        ? { ...s, journal: value }
-        : { ...s, [section]: { ...s[section], [key]: value } };
+    const next = { ...s, [section]: { ...s[section], [key]: value } };
     sheetRef.current = next;
     setSheet(next);
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -177,56 +321,55 @@ export default function DayView({
     const next = { ...s, habits: { ...s.habits, [id]: value } };
     sheetRef.current = next;
     setSheet(next);
-    persist(next); // habit taps save immediately — they're the streak source
+    persist(next);
   }
 
-  function addHabit() {
-    const name = newHabit.name.trim();
-    if (!name) return;
-    const habit = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-      name,
-      type: newHabit.type,
-      target: Number(newHabit.target) || 0,
-      unit: newHabit.unit.trim(),
-    };
-    const next = [...(habits || []), habit];
-    storage.setHabits(next);
-    onHabitsChange(next);
-    setNewHabit({ name: '', type: 'check', target: '', unit: '' });
+  function saveForm(section) {
+    const s = sheetRef.current;
+    const next = { ...s, [section]: { ...s[section], savedAt: new Date().toISOString() } };
+    sheetRef.current = next;
+    setSheet(next);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    persist(next);
+    setJustSaved(section);
+    setTimeout(() => setJustSaved(''), 2200);
   }
 
-  function deleteHabit(id) {
-    if (!window.confirm('Delete this habit? Its history stays in past days.')) return;
-    const next = (habits || []).filter((h) => h.id !== id);
-    storage.setHabits(next);
-    onHabitsChange(next);
-  }
-
-  // Flush pending save on unmount
-  useEffect(
-    () => () => {
-      if (saveTimer.current) {
-        clearTimeout(saveTimer.current);
-        persist(sheetRef.current);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [date],
-  );
-
-  const today = todayIso();
   const isToday = date === today;
   const session = schedule?.[date]?.session || '';
   const streak = streakCount(daily);
   const m = sheet.morning;
   const e = sheet.evening;
+  // Food planned on the previous evening feeds this morning's sheet
+  const plannedFood = daily?.[addDays(date, -1)]?.evening || {};
+  const hasPlannedFood = !!(plannedFood.foodBreakfast || plannedFood.foodLunch || plannedFood.foodDinner);
+  const cue = mindsetCueFor(date);
+
+  const partBtn = (id, label) => (
+    <button
+      onClick={() => setPart(id)}
+      style={{
+        flex: 1,
+        padding: '12px 10px',
+        borderRadius: 12,
+        background: part === id ? 'rgba(200, 146, 42, 0.14)' : 'var(--bg3)',
+        border: `1px solid ${part === id ? 'rgba(200, 146, 42, 0.45)' : 'var(--border)'}`,
+        color: part === id ? 'var(--gold)' : 'var(--text-mid)',
+        fontFamily: 'var(--font-display)',
+        fontSize: 14,
+        letterSpacing: '0.14em',
+        cursor: 'pointer',
+      }}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <>
       <ViewHeader
         title={isToday ? 'TODAY' : formatPretty(date).toUpperCase()}
-        subtitle={`${date} · Morning sheet, evening recap, journal.`}
+        subtitle={`${date} · Morning and evening sheets.`}
         right={
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <GhostButton onClick={() => setDate(addDays(date, -1))}>←</GhostButton>
@@ -272,9 +415,12 @@ export default function DayView({
               );
             })}
           </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
-            <DoneBadge done={morningDone(sheet)} label="MORNING" />
-            <DoneBadge done={eveningDone(sheet)} label="EVENING" />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+            <GhostButton
+              onClick={() => window.open('https://outlook.live.com/calendar/0/view/week', '_blank', 'noopener')}
+            >
+              📅 REVIEW WEEK IN OUTLOOK
+            </GhostButton>
             {streak > 0 && (
               <span style={{ fontFamily: 'var(--font-display)', fontSize: 11, letterSpacing: '0.16em', color: 'var(--gold)' }}>
                 🔥 {streak} DAY STREAK
@@ -283,297 +429,196 @@ export default function DayView({
           </div>
         </Section>
 
-        {/* Morning sheet */}
-        <Section title="☀️ Morning sheet">
-          <div
-            style={{
-              padding: '12px 14px',
-              borderRadius: 12,
-              background: 'rgba(200, 146, 42, 0.06)',
-              border: '1px solid rgba(200, 146, 42, 0.25)',
-              marginBottom: 12,
-            }}
-          >
-            <div
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 11,
-                letterSpacing: '0.22em',
-                color: 'var(--gold)',
-                marginBottom: 8,
-              }}
-            >
-              AFFIRMATIONS — SAY THEM LIKE YOU MEAN THEM
-            </div>
-            {(affirmations || []).map((a, i) => (
-              <div key={i} style={{ fontSize: 15, color: 'var(--text)', lineHeight: 1.7 }}>
-                {a}
+        {/* Morning / Evening switch */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          {partBtn('morning', `☀️ MORNING ${morningDone(sheet) ? '✓' : ''}`)}
+          {partBtn('evening', `🌙 EVENING ${eveningDone(sheet) ? '✓' : ''}`)}
+        </div>
+
+        {part === 'morning' ? (
+          <Section title="☀️ Morning sheet">
+            <div style={{ display: 'grid', gap: 14 }}>
+              <AffirmationsPanel
+                affirmations={affirmations}
+                read={m.affirmationsRead}
+                onRead={(v) => update('morning', 'affirmationsRead', v)}
+              />
+              <GratitudePanel values={m} onChange={(k, v) => update('morning', k, v)} />
+
+              {/* Mindset — Soren */}
+              <div
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  background: 'rgba(42, 200, 168, 0.06)',
+                  border: '1px solid rgba(42, 200, 168, 0.3)',
+                }}
+              >
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 11, letterSpacing: '0.22em', color: '#2ac8a8', marginBottom: 6 }}>
+                  🧠 SOREN'S MINDSET CUE
+                </div>
+                <div style={{ fontSize: 15, color: 'var(--text)', fontStyle: 'italic', lineHeight: 1.5 }}>
+                  “{cue}”
+                </div>
+                {onOpenCoach && (
+                  <div style={{ marginTop: 10 }}>
+                    <GhostButton onClick={() => onOpenCoach('mentalPrep')} style={{ fontSize: 11, padding: '8px 12px' }}>
+                      GO DEEPER WITH SOREN →
+                    </GhostButton>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <Check
-              checked={m.affirmationsRead}
-              onChange={(v) => update('morning', 'affirmationsRead', v)}
-              label="I've read my affirmations out loud"
-            />
-          </div>
 
-          {session && (
-            <div
-              style={{
-                fontSize: 14,
-                color: 'var(--text-mid)',
-                padding: '10px 12px',
-                borderRadius: 10,
-                background: 'var(--bg3)',
-                border: '1px solid var(--border)',
-                marginBottom: 12,
-              }}
-            >
-              <span style={{ color: 'var(--text-dim)' }}>Training today: </span>
-              {session}
-            </div>
-          )}
-
-          <div style={{ display: 'grid', gap: 12 }}>
-            <Field label="Current main focus">
-              <TextInput
-                value={m.focus}
-                onChange={(v) => update('morning', 'focus', v)}
-                placeholder="The ONE thing today serves"
-              />
-            </Field>
-            <Field label="15 minutes towards a goal — what exactly?">
-              <TextInput
-                value={m.action15}
-                onChange={(v) => update('morning', 'action15', v)}
-                placeholder="e.g. 15 min prospecting calls before 9am"
-              />
-            </Field>
-            <Field label="Top 3 to-dos / priority">
-              <TextArea
-                rows={3}
-                value={m.todos}
-                onChange={(v) => update('morning', 'todos', v)}
-                placeholder={'1.\n2.\n3.'}
-              />
-            </Field>
-            <Field label="Budget note (food / going out)" hint="Optional — keep yourself honest.">
-              <TextInput
-                value={m.budgetNote}
-                onChange={(v) => update('morning', 'budgetNote', v)}
-                placeholder="e.g. £10 food, no going out"
-              />
-            </Field>
-          </div>
-        </Section>
-
-        {/* Habits */}
-        <Section title="✅ Habits">
-          {(habits || []).length === 0 && !manageHabits && (
-            <div style={{ fontSize: 14, color: 'var(--text-dim)', fontStyle: 'italic', marginBottom: 10 }}>
-              No habits yet — add the things you want to hold yourself to daily.
-            </div>
-          )}
-          <div style={{ display: 'grid', gap: 8 }}>
-            {(habits || []).map((h) => {
-              const val = sheet.habits[h.id];
-              const done = habitDone(h, val);
-              const streakN = habitStreak(h, daily);
-              const targetLabel =
-                h.type === 'count'
-                  ? `${Number(val) || 0}/${Math.max(1, Number(h.target) || 1)}`
-                  : h.type === 'number'
-                    ? `${h.unit || ''}${Number(val) || 0}${h.target ? ` / ${h.unit || ''}${h.target}` : ''}`
-                    : '';
-              return (
+              {session && (
                 <div
-                  key={h.id}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
+                    fontSize: 14,
+                    color: 'var(--text-mid)',
                     padding: '10px 12px',
                     borderRadius: 10,
-                    background: done ? 'rgba(111, 178, 65, 0.1)' : 'var(--bg3)',
-                    border: `1px solid ${done ? 'rgba(111, 178, 65, 0.35)' : 'var(--border)'}`,
+                    background: 'var(--bg3)',
+                    border: '1px solid var(--border)',
                   }}
                 >
-                  {h.type === 'check' ? (
-                    <button
-                      onClick={() => setHabitValue(h.id, !val)}
-                      style={{
-                        flexShrink: 0,
-                        width: 26,
-                        height: 26,
-                        borderRadius: 8,
-                        border: `1.5px solid ${done ? '#6fb241' : 'var(--border)'}`,
-                        background: done ? 'rgba(111, 178, 65, 0.25)' : 'transparent',
-                        color: '#6fb241',
-                        cursor: 'pointer',
-                        fontSize: 15,
-                      }}
-                    >
-                      {done ? '✓' : ''}
-                    </button>
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                      <button
-                        onClick={() => setHabitValue(h.id, Math.max(0, (Number(val) || 0) - (h.type === 'count' ? 1 : Number(h.target) ? Math.ceil(Number(h.target) / 4) : 1)))}
-                        style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)', cursor: 'pointer' }}
-                      >
-                        −
-                      </button>
-                      <button
-                        onClick={() => setHabitValue(h.id, (Number(val) || 0) + (h.type === 'count' ? 1 : Number(h.target) ? Math.ceil(Number(h.target) / 4) : 1))}
-                        style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)', cursor: 'pointer' }}
-                      >
-                        +
-                      </button>
-                    </div>
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 15, color: 'var(--text)' }}>{h.name}</span>
-                    {targetLabel && (
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 12, letterSpacing: '0.08em', color: done ? '#6fb241' : 'var(--text-mid)', marginLeft: 8 }}>
-                        {targetLabel}
-                      </span>
-                    )}
-                  </div>
-                  {streakN > 0 && (
-                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 11, letterSpacing: '0.1em', color: 'var(--gold)', flexShrink: 0 }}>
-                      🔥 {streakN}
-                    </span>
-                  )}
-                  {manageHabits && (
-                    <button
-                      onClick={() => deleteHabit(h.id)}
-                      style={{ padding: '2px 8px', borderRadius: 6, background: 'transparent', border: '1px solid var(--border)', color: '#e0918a', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
-                    >
-                      ✕
-                    </button>
-                  )}
+                  <span style={{ color: 'var(--text-dim)' }}>🏋️ Training today: </span>
+                  {session}
                 </div>
-              );
-            })}
-          </div>
+              )}
 
-          <div style={{ marginTop: 12 }}>
-            <GhostButton onClick={() => setManageHabits((v) => !v)}>
-              {manageHabits ? 'DONE MANAGING' : 'MANAGE HABITS'}
-            </GhostButton>
-          </div>
+              {hasPlannedFood && (
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    background: 'rgba(74, 138, 42, 0.07)',
+                    border: '1px solid rgba(74, 138, 42, 0.3)',
+                    fontSize: 14,
+                    color: 'var(--text)',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 11, letterSpacing: '0.22em', color: '#6fb241', marginBottom: 6 }}>
+                    🥗 TODAY'S FOOD — AS PLANNED LAST NIGHT
+                  </div>
+                  {plannedFood.foodBreakfast && <div><span style={{ color: 'var(--text-dim)' }}>Breakfast:</span> {plannedFood.foodBreakfast}</div>}
+                  {plannedFood.foodLunch && <div><span style={{ color: 'var(--text-dim)' }}>Lunch:</span> {plannedFood.foodLunch}</div>}
+                  {plannedFood.foodDinner && <div><span style={{ color: 'var(--text-dim)' }}>Dinner:</span> {plannedFood.foodDinner}</div>}
+                </div>
+              )}
 
-          {manageHabits && (
-            <div
-              style={{
-                marginTop: 12,
-                padding: 12,
-                borderRadius: 12,
-                background: 'var(--bg3)',
-                border: '1px solid var(--border)',
-                display: 'grid',
-                gap: 10,
-              }}
-            >
-              <Field label="Habit name">
+              <Field label="Budget — account balance" hint="Check the pot. Write the number down — eyes on it daily.">
                 <TextInput
-                  value={newHabit.name}
-                  onChange={(v) => setNewHabit((n) => ({ ...n, name: v }))}
-                  placeholder="e.g. No processed food"
+                  value={m.balance}
+                  onChange={(v) => update('morning', 'balance', v)}
+                  placeholder="£"
                 />
               </Field>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                <Field label="Type">
-                  <Select
-                    value={newHabit.type}
-                    onChange={(v) => setNewHabit((n) => ({ ...n, type: v }))}
-                    options={[
-                      { value: 'check', label: 'Tick (done / not)' },
-                      { value: 'count', label: 'Times per day' },
-                      { value: 'number', label: 'Number (£, min…)' },
-                    ]}
-                  />
-                </Field>
-                {newHabit.type !== 'check' && (
-                  <Field label={newHabit.type === 'count' ? 'Times / day' : 'Daily target'}>
-                    <TextInput
-                      type="number"
-                      value={newHabit.target}
-                      onChange={(v) => setNewHabit((n) => ({ ...n, target: v }))}
-                      placeholder={newHabit.type === 'count' ? '2' : '10'}
-                    />
-                  </Field>
+              <Field label="Current main focus">
+                <TextInput
+                  value={m.focus}
+                  onChange={(v) => update('morning', 'focus', v)}
+                  placeholder="The ONE thing today serves"
+                />
+              </Field>
+              <Field label="15 minutes towards a goal — what exactly?">
+                <TextInput
+                  value={m.action15}
+                  onChange={(v) => update('morning', 'action15', v)}
+                  placeholder="e.g. 15 min prospecting calls before 9am"
+                />
+              </Field>
+              <Field label="Top 3 to-dos / priority">
+                <TextArea rows={3} value={m.todos} onChange={(v) => update('morning', 'todos', v)} placeholder={'1.\n2.\n3.'} />
+              </Field>
+
+              <HabitList habits={habits} when="morning" sheet={sheet} daily={daily} onValue={setHabitValue} />
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
+                {onGoTo && (
+                  <GhostButton onClick={() => onGoTo('habits')}>MANAGE HABITS</GhostButton>
                 )}
-                {newHabit.type === 'number' && (
-                  <Field label="Unit">
-                    <TextInput
-                      value={newHabit.unit}
-                      onChange={(v) => setNewHabit((n) => ({ ...n, unit: v }))}
-                      placeholder="£ / min / pages"
-                    />
-                  </Field>
-                )}
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <GoldButton onClick={addHabit} disabled={!newHabit.name.trim()}>
-                  ADD HABIT
+                <GoldButton onClick={() => saveForm('morning')}>
+                  {justSaved === 'morning' ? 'SAVED ✓' : m.savedAt ? 'UPDATE MORNING SHEET' : 'SAVE MORNING SHEET'}
                 </GoldButton>
               </div>
+              {m.savedAt && (
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic', textAlign: 'right' }}>
+                  Saved {new Date(m.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — use ← to review past days.
+                </div>
+              )}
             </div>
-          )}
-        </Section>
+          </Section>
+        ) : (
+          <Section title="🌙 Evening sheet">
+            <div style={{ display: 'grid', gap: 14 }}>
+              <AffirmationsPanel
+                affirmations={affirmations}
+                read={e.affirmationsRead}
+                onRead={(v) => update('evening', 'affirmationsRead', v)}
+              />
+              <GratitudePanel values={e} onChange={(k, v) => update('evening', k, v)} />
 
-        {/* Evening sheet */}
-        <Section title="🌙 Evening recap">
-          <div style={{ display: 'grid', gap: 12 }}>
-            <Field label="What went well today?">
-              <TextArea rows={2} value={e.wentWell} onChange={(v) => update('evening', 'wentWell', v)} />
-            </Field>
-            <Field label="What could I have done better?">
-              <TextArea rows={2} value={e.doBetter} onChange={(v) => update('evening', 'doBetter', v)} />
-            </Field>
-            <Field label="One thing I learned">
-              <TextInput value={e.learned} onChange={(v) => update('evening', 'learned', v)} />
-            </Field>
-            <Field label="One thing to review">
-              <TextInput value={e.review} onChange={(v) => update('evening', 'review', v)} />
-            </Field>
-            <Field label="3 things I'm grateful for">
-              <div style={{ display: 'grid', gap: 8 }}>
-                <TextInput value={e.gratitude1} onChange={(v) => update('evening', 'gratitude1', v)} placeholder="1." />
-                <TextInput value={e.gratitude2} onChange={(v) => update('evening', 'gratitude2', v)} placeholder="2." />
-                <TextInput value={e.gratitude3} onChange={(v) => update('evening', 'gratitude3', v)} placeholder="3." />
+              <Field label="What went well today?">
+                <TextArea rows={2} value={e.wentWell} onChange={(v) => update('evening', 'wentWell', v)} />
+              </Field>
+              <Field label="What could I have done better?">
+                <TextArea rows={2} value={e.doBetter} onChange={(v) => update('evening', 'doBetter', v)} />
+              </Field>
+              <Field label="One thing I learned">
+                <TextInput value={e.learned} onChange={(v) => update('evening', 'learned', v)} />
+              </Field>
+              <Field label="One thing to review">
+                <TextInput value={e.review} onChange={(v) => update('evening', 'review', v)} />
+              </Field>
+
+              <div
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  background: 'rgba(74, 138, 42, 0.07)',
+                  border: '1px solid rgba(74, 138, 42, 0.3)',
+                  display: 'grid',
+                  gap: 10,
+                }}
+              >
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 11, letterSpacing: '0.22em', color: '#6fb241' }}>
+                  🥗 TOMORROW'S FOOD — DECIDE IT NOW, EAT IT TOMORROW
+                </div>
+                <Field label="Breakfast">
+                  <TextInput value={e.foodBreakfast} onChange={(v) => update('evening', 'foodBreakfast', v)} placeholder="e.g. Overnight oats jar + banana" />
+                </Field>
+                <Field label="Lunch">
+                  <TextInput value={e.foodLunch} onChange={(v) => update('evening', 'foodLunch', v)} placeholder="e.g. Chicken rice bowl from batch" />
+                </Field>
+                <Field label="Dinner">
+                  <TextInput value={e.foodDinner} onChange={(v) => update('evening', 'foodDinner', v)} placeholder="e.g. Chilli portion 2 + greens" />
+                </Field>
               </div>
-            </Field>
-            <div style={{ display: 'grid', gap: 8 }}>
+
               <Check
                 checked={e.tomorrowPlanned}
                 onChange={(v) => update('evening', 'tomorrowPlanned', v)}
-                label="Tomorrow planned / reviewed"
+                label="Tomorrow planned / diary reviewed"
               />
-              <Check
-                checked={e.affirmationsRead}
-                onChange={(v) => update('evening', 'affirmationsRead', v)}
-                label="Affirmations read tonight"
-              />
-            </div>
-          </div>
-        </Section>
 
-        {/* Journal */}
-        <Section title="📓 Journal">
-          <TextArea
-            rows={8}
-            value={sheet.journal}
-            onChange={(v) => update('journal', null, v)}
-            placeholder="Free page. Whatever's in your head — get it out here."
-          />
-          <div style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic', marginTop: 8 }}>
-            Autosaves as you type. Use ← to reread any previous day.
-          </div>
-        </Section>
+              <HabitList habits={habits} when="evening" sheet={sheet} daily={daily} onValue={setHabitValue} />
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
+                {onGoTo && (
+                  <GhostButton onClick={() => onGoTo('habits')}>MANAGE HABITS</GhostButton>
+                )}
+                <GoldButton onClick={() => saveForm('evening')}>
+                  {justSaved === 'evening' ? 'SAVED ✓' : e.savedAt ? 'UPDATE EVENING SHEET' : 'SAVE EVENING SHEET'}
+                </GoldButton>
+              </div>
+              {e.savedAt && (
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic', textAlign: 'right' }}>
+                  Saved {new Date(e.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — use ← to review past days.
+                </div>
+              )}
+            </div>
+          </Section>
+        )}
       </ViewBody>
     </>
   );

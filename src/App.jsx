@@ -4,6 +4,7 @@ import ChatWindow from './ChatWindow.jsx';
 import HomeView from './HomeView.jsx';
 import PlanView from './PlanView.jsx';
 import DayView from './DayView.jsx';
+import HabitsView from './HabitsView.jsx';
 import ProfileView from './ProfileView.jsx';
 import LogView from './LogView.jsx';
 import SettingsView from './SettingsView.jsx';
@@ -24,6 +25,7 @@ const NAV = [
 const DESKTOP_NAV = [
   { id: 'home', label: 'Home', icon: '🏠' },
   { id: 'day', label: 'Day', icon: '☀️' },
+  { id: 'habits', label: 'Habits', icon: '✅' },
   { id: 'plan', label: 'Plan', icon: '📋' },
   { id: 'coaches', label: 'Coaches', icon: '💬' },
   { id: 'log', label: 'Log (history)', icon: '📊' },
@@ -557,10 +559,14 @@ export default function App() {
         onDailyChange={setDaily}
         schedule={schedule}
         habits={habits}
-        onHabitsChange={setHabits}
+        onGoTo={(v) => setView(v)}
+        onOpenCoach={openCoach}
       />
     );
     mobileTitle = 'TODAY';
+  } else if (view === 'habits') {
+    body = <HabitsView habits={habits} onHabitsChange={setHabits} daily={daily} />;
+    mobileTitle = 'HABITS';
   } else if (view === 'plan') {
     body = (
       <PlanView
@@ -668,6 +674,7 @@ export default function App() {
             goals={goals}
             affirmations={affirmations}
             daily={daily}
+            habits={habits}
             onSavePlanFromMessage={savePlanFromMessage}
             onApplyWeekPlan={applyWeekPlan}
             onApplyMilestones={applyMilestones}
