@@ -6,11 +6,13 @@ import {
   hasProfileBlock,
   hasDiaryBlock,
   hasAffirmationsBlock,
+  hasHabitsBlock,
   parseWeekBlock,
   parseMilestonesBlock,
   parseProfileBlock,
   parseDiaryBlock,
   parseAffirmationsBlock,
+  parseHabitsBlock,
   stripForgeBlocks,
 } from './parsers.js';
 import { buildEventsIcs, downloadIcs } from './calendar.js';
@@ -130,12 +132,56 @@ export default function ChatWindow({
   onApplyMilestones,
   onApplyProfileUpdates,
   onApplyAffirmations,
+  onApplyHabits,
   onClearChat,
 }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  const SpeechRecognitionImpl =
+    typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  function toggleDictation() {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    if (!SpeechRecognitionImpl) {
+      window.alert('Voice input is not supported in this browser. On iPhone use Safari; on desktop use Chrome or Edge.');
+      return;
+    }
+    const rec = new SpeechRecognitionImpl();
+    rec.lang = 'en-GB';
+    rec.continuous = true;
+    rec.interimResults = true;
+    let committed = input ? input.trimEnd() + ' ' : '';
+    rec.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) committed += t.trim() + ' ';
+        else interim += t;
+      }
+      setInput((committed + interim).trimStart());
+    };
+    rec.onend = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
+    rec.onerror = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
+    recognitionRef.current = rec;
+    setListening(true);
+    rec.start();
+  }
+
+  useEffect(() => () => recognitionRef.current?.stop(), []);
 
   const started = (messages || []).length > 0;
   const isFelix = coach.id === 'racePlanning';
@@ -216,6 +262,7 @@ export default function ChatWindow({
   }
 
   async function sendMessage(text) {
+    recognitionRef.current?.stop();
     const content = (text ?? input).trim();
     if (!content || loading) return;
     const newHistory = [...(messages || []), { role: 'user', content }];
@@ -410,6 +457,7 @@ export default function ChatWindow({
       ?.content || '';
   const showDiaryBtn = !!lastDiaryContent;
   const showAffirmationsBtn = hasAffirmationsBlock(lastAssistantContent);
+  const showHabitsBtn = hasHabitsBlock(lastAssistantContent);
 
   return (
     <div
@@ -473,6 +521,27 @@ export default function ChatWindow({
               }}
             >
               APPLY MILESTONES
+            </button>
+          )}
+          {showHabitsBtn && onApplyHabits && (
+            <button
+              onClick={() => {
+                const parsed = parseHabitsBlock(lastAssistantContent);
+                if (parsed) onApplyHabits(parsed);
+              }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                background: coach.accentDim,
+                border: `1px solid ${coach.accentBorder}`,
+                color: coach.accentColor,
+                fontFamily: 'var(--font-display)',
+                fontSize: 11,
+                letterSpacing: '0.18em',
+                cursor: 'pointer',
+              }}
+            >
+              ADD HABITS
             </button>
           )}
           {showAffirmationsBtn && onApplyAffirmations && (
@@ -776,6 +845,25 @@ export default function ChatWindow({
               fontFamily: 'var(--font-body)',
             }}
           />
+          <button
+            onClick={toggleDictation}
+            disabled={loading}
+            aria-label={listening ? 'Stop voice input' : 'Start voice input'}
+            style={{
+              flexShrink: 0,
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              border: `1px solid ${listening ? '#e0918a' : 'var(--border)'}`,
+              background: listening ? 'rgba(224, 145, 138, 0.18)' : 'var(--bg3)',
+              color: listening ? '#e0918a' : 'var(--text-mid)',
+              fontSize: 19,
+              cursor: 'pointer',
+              animation: listening ? 'pulse 1.2s ease-in-out infinite' : 'none',
+            }}
+          >
+            {listening ? '■' : '🎤'}
+          </button>
           <button
             onClick={() => sendMessage()}
             disabled={loading || !input.trim()}

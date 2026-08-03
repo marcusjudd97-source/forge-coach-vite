@@ -150,7 +150,7 @@ function DesktopSidebar({ view, onNav, onSettings, activeCoach, onSelectCoach, s
                 padding: '4px 10px 8px',
               }}
             >
-              THE SIX
+              THE TEAM
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {COACH_ORDER.map((id) => {
@@ -450,6 +450,26 @@ export default function App() {
     window.alert(`Saved ${parsed.length} affirmations — they're now on your Day sheet every morning and evening.`);
   }
 
+  function applyHabitsFromCoach(parsed) {
+    if (!Array.isArray(parsed) || !parsed.length) return;
+    const existing = storage.getHabits();
+    const names = new Set(existing.map((h) => h.name.toLowerCase()));
+    const additions = parsed
+      .filter((h) => !names.has(h.name.toLowerCase()))
+      .map((h) => ({
+        ...h,
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + Math.random().toString(36).slice(2, 4),
+      }));
+    if (!additions.length) {
+      window.alert('Those habits are already in your tracker.');
+      return;
+    }
+    const next = [...existing, ...additions];
+    storage.setHabits(next);
+    setHabits(next);
+    window.alert(`Added ${additions.length} habit${additions.length === 1 ? '' : 's'} — they're on your daily sheets from today.`);
+  }
+
   function applyProfileUpdates(updates) {
     if (!updates || !Object.keys(updates).length) return;
     const current = storage.getProfile();
@@ -545,6 +565,7 @@ export default function App() {
         log={log}
         goals={goals}
         daily={daily}
+        habits={habits}
         hasApiKey={!!apiKey}
         onGoTo={(v) => setView(v)}
         onOpenCoach={(id) => openCoach(id)}
@@ -680,6 +701,7 @@ export default function App() {
             onApplyMilestones={applyMilestones}
             onApplyProfileUpdates={applyProfileUpdates}
             onApplyAffirmations={applyAffirmations}
+            onApplyHabits={applyHabitsFromCoach}
             onClearChat={() => clearCoachChat(coach.id)}
           />
         </>

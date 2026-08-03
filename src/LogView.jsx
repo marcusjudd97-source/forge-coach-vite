@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { storage, emptyLogEntry } from './storage.js';
+import { extractWorkoutFromImage } from './workoutExtract.js';
 import {
   Section,
   Field,
@@ -32,6 +33,35 @@ const STATUS = [
 export default function LogView({ log, onLogChange }) {
   const [entry, setEntry] = useState(emptyLogEntry());
   const [editingId, setEditingId] = useState(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractMsg, setExtractMsg] = useState('');
+  const fileRef = useRef(null);
+
+  async function handleScreenshot(ev) {
+    const file = ev.target.files?.[0];
+    ev.target.value = '';
+    if (!file) return;
+    setExtracting(true);
+    setExtractMsg('');
+    try {
+      const w = await extractWorkoutFromImage(file);
+      setEntry((e) => ({
+        ...e,
+        date: w.date || e.date,
+        discipline: w.discipline !== 'other' ? w.discipline : e.discipline,
+        durationMin: w.durationMin ? String(w.durationMin) : e.durationMin,
+        avgHr: w.avgHr ? String(w.avgHr) : e.avgHr,
+        avgPower: w.avgPower ? String(w.avgPower) : e.avgPower,
+        actual: w.summary || e.actual,
+        status: 'done',
+      }));
+      setExtractMsg(`Read: ${w.summary || 'workout details filled in'} — check the fields and save.`);
+    } catch (err) {
+      setExtractMsg(`Couldn't read it: ${err.message || err}`);
+    } finally {
+      setExtracting(false);
+    }
+  }
 
   function update(field, value) {
     setEntry((e) => ({ ...e, [field]: value }));
@@ -89,6 +119,30 @@ export default function LogView({ log, onLogChange }) {
       />
       <ViewBody>
         <Section title={editingId ? 'Edit entry' : 'New entry'}>
+          <div style={{ marginBottom: 14 }}>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              onChange={handleScreenshot}
+              style={{ display: 'none' }}
+            />
+            <GhostButton onClick={() => fileRef.current?.click()} disabled={extracting}>
+              {extracting ? 'READING SCREENSHOT…' : '📸 FILL FROM WORKOUT SCREENSHOT'}
+            </GhostButton>
+            {extractMsg && (
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 13,
+                  color: extractMsg.startsWith("Couldn't") ? '#e8a090' : '#a8cf8e',
+                  lineHeight: 1.4,
+                }}
+              >
+                {extractMsg}
+              </div>
+            )}
+          </div>
           <Grid cols={2}>
             <Field label="Date">
               <TextInput type="date" value={entry.date} onChange={(v) => update('date', v)} />

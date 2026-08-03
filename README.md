@@ -2,16 +2,18 @@
 
 A dark-luxury personal coaching PWA with six specialist Claude-powered coaches for the 140.6 journey. Built with React + Vite. Runs entirely in the browser — your API key is stored in your own browser, and requests go direct to Anthropic.
 
-## The Six
+## The Team
 
 | Coach             | Specialist          | Accent  | What they're for                                        |
 | ----------------- | ------------------- | ------- | ------------------------------------------------------- |
+| 🧭 Coach Kira     | Head Coach          | Pink    | Master plan, weekly sessions, the daily conversation    |
 | 🏊 Coach Marina   | Swim                | Blue    | Open water, mass starts, pacing the 3.8km opener        |
 | 🚴 Coach Declan   | Cycling             | Gold    | FTP, IF, TSS, on-bike nutrition, "not too hard"         |
 | 🏃 Coach Amara    | Running             | Amber   | Running off the bike, the marathon that begins at 180km |
-| 🥗 Coach Petra    | Nutrition           | Green   | Carbs/hr, sodium, carb-load, race-morning breakfast     |
+| 🥗 Coach Petra    | Nutrition           | Green   | Carbs/hr, sodium, carb-load, meal prep, food diary events |
 | 🗺️ Coach Felix    | Race Planning       | Violet  | Course specifics, T1/T2 bags, taper, race-week logistics |
-| 🧠 Coach Soren    | Mental Preparation  | Teal    | Dark moments, mantras, fear, visualisation              |
+| 🧠 Coach Soren    | Mental Preparation  | Teal    | Dark moments, mantras, fear, visualisation, affirmations |
+| 🔁 Coach Wren     | Habits              | Orange  | Habit design, streaks, systems — Atomic Habits methodology |
 
 ## Local setup
 

@@ -5,6 +5,7 @@ const MILESTONE_BLOCK_RE = /<<<\s*FORGE-MILESTONES\s*([\s\S]*?)>>>/i;
 const PROFILE_BLOCK_RE = /<<<\s*FORGE-PROFILE\s*([\s\S]*?)>>>/i;
 const DIARY_BLOCK_RE = /<<<\s*FORGE-DIARY\s*([\s\S]*?)>>>/i;
 const AFFIRM_BLOCK_RE = /<<<\s*FORGE-AFFIRMATIONS\s*([\s\S]*?)>>>/i;
+const HABITS_BLOCK_RE = /<<<\s*FORGE-HABITS\s*([\s\S]*?)>>>/i;
 
 export function hasWeekBlock(text) {
   return typeof text === 'string' && WEEK_BLOCK_RE.test(text);
@@ -31,6 +32,41 @@ export function parseAffirmationsBlock(text) {
     .map((l) => l.trim().replace(/^[-*•]\s*/, ''))
     .filter(Boolean);
   return lines.length ? lines.slice(0, 15) : null;
+}
+
+export function hasHabitsBlock(text) {
+  return typeof text === 'string' && HABITS_BLOCK_RE.test(text);
+}
+
+// Lines: - Name | morning/evening/any | check/count/number | target | unit
+export function parseHabitsBlock(text) {
+  if (!text) return null;
+  const match = text.match(HABITS_BLOCK_RE);
+  if (!match) return null;
+  const lines = match[1]
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && l !== '-');
+  const habits = [];
+  for (const raw of lines) {
+    const parts = raw.replace(/^[-*•]\s*/, '').split('|').map((p) => p.trim());
+    if (parts.length < 2 || !parts[0]) continue;
+    const [name, whenRaw, typeRaw, targetRaw, unitRaw] = parts;
+    const when = ['morning', 'evening', 'any'].includes((whenRaw || '').toLowerCase())
+      ? whenRaw.toLowerCase()
+      : 'any';
+    const type = ['check', 'count', 'number'].includes((typeRaw || '').toLowerCase())
+      ? typeRaw.toLowerCase()
+      : 'check';
+    habits.push({
+      name,
+      when,
+      type,
+      target: Number(targetRaw) || 0,
+      unit: (unitRaw || '').trim(),
+    });
+  }
+  return habits.length ? habits : null;
 }
 
 // Fallback for replies truncated mid-block: open marker but no closing >>>
@@ -176,6 +212,7 @@ export function stripForgeBlocks(text) {
     .replace(PROFILE_BLOCK_RE, '')
     .replace(DIARY_BLOCK_RE, '')
     .replace(AFFIRM_BLOCK_RE, '')
+    .replace(HABITS_BLOCK_RE, '')
     .replace(DIARY_BLOCK_OPEN_RE, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

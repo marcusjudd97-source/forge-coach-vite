@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GoldButton, GhostButton } from './ui.jsx';
+import { extractWorkoutFromImage } from './workoutExtract.js';
 
 const RPE_LABELS = {
   1: 'very easy',
@@ -35,6 +36,29 @@ export default function QuickLog({
   const [avgHr, setAvgHr] = useState(prevEntry?.avgHr || '');
   const [durationMin, setDurationMin] = useState(prevEntry?.durationMin || '');
   const [note, setNote] = useState(prevEntry?.notes || '');
+  const [extracting, setExtracting] = useState(false);
+  const [extractMsg, setExtractMsg] = useState('');
+  const fileRef = useRef(null);
+
+  async function handleScreenshot(ev) {
+    const file = ev.target.files?.[0];
+    ev.target.value = '';
+    if (!file) return;
+    setExtracting(true);
+    setExtractMsg('');
+    try {
+      const w = await extractWorkoutFromImage(file);
+      if (w.durationMin) setDurationMin(String(w.durationMin));
+      if (w.avgHr) setAvgHr(String(w.avgHr));
+      if (w.summary) setNote((n) => (n ? n : w.summary));
+      setStatus('done');
+      setExtractMsg(`Read: ${w.summary || 'workout details filled in'} — check and save.`);
+    } catch (err) {
+      setExtractMsg(`Couldn't read it: ${err.message || err}`);
+    } finally {
+      setExtracting(false);
+    }
+  }
 
   useEffect(() => {
     if (open) {
@@ -132,6 +156,31 @@ export default function QuickLog({
               }}
             >
               {sessionText.length > 160 ? sessionText.slice(0, 160) + '…' : sessionText}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '14px 20px 0' }}>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            onChange={handleScreenshot}
+            style={{ display: 'none' }}
+          />
+          <GhostButton onClick={() => fileRef.current?.click()} disabled={extracting}>
+            {extracting ? 'READING SCREENSHOT…' : '📸 FILL FROM WORKOUT SCREENSHOT'}
+          </GhostButton>
+          {extractMsg && (
+            <div
+              style={{
+                marginTop: 8,
+                fontSize: 13,
+                color: extractMsg.startsWith("Couldn't") ? '#e8a090' : '#a8cf8e',
+                lineHeight: 1.4,
+              }}
+            >
+              {extractMsg}
             </div>
           )}
         </div>

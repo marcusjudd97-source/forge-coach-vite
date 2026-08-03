@@ -2,6 +2,7 @@ import { daysUntil, todayIso, addDays, formatPretty } from './storage.js';
 import { Section, GoldButton, GhostButton, ViewHeader, ViewBody } from './ui.jsx';
 import { COACHES, COACH_ORDER } from './coaches.js';
 import { morningDone, eveningDone, streakCount } from './DayView.jsx';
+import WeekReview from './WeekReview.jsx';
 
 function hasMasterPlan(planText) {
   return !!(planText && planText.trim().length > 40);
@@ -31,6 +32,7 @@ export default function HomeView({
   log,
   goals,
   daily,
+  habits,
   onGoTo,
   onOpenCoach,
   hasApiKey,
@@ -111,6 +113,8 @@ export default function HomeView({
             })()}
           </Section>
         )}
+
+        <WeekReview daily={daily} habits={habits} schedule={schedule} log={log} />
 
         {profileFilled && (
           <Section>
@@ -350,7 +354,7 @@ export default function HomeView({
           </Section>
         )}
 
-        <Section title="Your six coaches">
+        <Section title="Your coaching team">
           <div
             style={{
               display: 'grid',
