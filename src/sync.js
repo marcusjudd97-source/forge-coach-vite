@@ -22,7 +22,7 @@ const TABLE = 'forge_data';
 const PUSH_DEBOUNCE_MS = 1200;
 
 let client = null;
-function getClient() {
+export function getClient() {
   if (!syncConfigured) return null;
   if (!client) client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   return client;

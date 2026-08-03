@@ -8,7 +8,10 @@ import {
   fullSync,
   forceUpload,
   forceDownload,
+  getClient,
 } from './sync.js';
+
+const FEED_BASE = 'https://forge-coach-vite.vercel.app/api/calendar';
 import { Section, Field, TextInput, GoldButton, GhostButton } from './ui.jsx';
 
 function timeAgo(ms) {
@@ -27,6 +30,42 @@ export default function AccountSync() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null); // { kind: 'ok' | 'err', text }
+  const [feedUrl, setFeedUrl] = useState('');
+  const [feedCopied, setFeedCopied] = useState(false);
+
+  async function showFeedUrl() {
+    const supa = getClient();
+    const user = status?.user;
+    if (!supa || !user) return;
+    setBusy(true);
+    try {
+      let { data } = await supa.from('calendar_tokens').select('token').maybeSingle();
+      if (!data) {
+        const ins = await supa
+          .from('calendar_tokens')
+          .insert({ user_id: user.id })
+          .select('token')
+          .single();
+        if (ins.error) throw ins.error;
+        data = ins.data;
+      }
+      setFeedUrl(`${FEED_BASE}?token=${data.token}`);
+    } catch (err) {
+      setMsg({ kind: 'err', text: `Couldn't get feed URL: ${err.message || err}` });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyFeedUrl() {
+    try {
+      await navigator.clipboard.writeText(feedUrl);
+      setFeedCopied(true);
+      setTimeout(() => setFeedCopied(false), 2200);
+    } catch {
+      window.prompt('Copy the feed URL:', feedUrl);
+    }
+  }
 
   useEffect(() => onSyncStatus(setStatus), []);
 
@@ -90,7 +129,57 @@ export default function AccountSync() {
             Your Anthropic API key is never synced — enter it once per device.
           </div>
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.5 }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 11,
+                letterSpacing: '0.22em',
+                color: 'var(--gold)',
+                marginBottom: 8,
+              }}
+            >
+              📅 OUTLOOK LIVE FEED
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 10, lineHeight: 1.5 }}>
+              Subscribe Outlook to your private FORGE calendar once, and every training session and
+              coach diary event appears there automatically — no more manual imports. In Outlook:
+              <strong style={{ color: 'var(--text-mid)' }}> Add calendar → Subscribe from web</strong>,
+              paste the URL, name it FORGE.
+            </div>
+            {feedUrl ? (
+              <>
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    background: 'var(--bg3)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text)',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                    fontSize: 12,
+                    wordBreak: 'break-all',
+                    marginBottom: 8,
+                    userSelect: 'all',
+                  }}
+                >
+                  {feedUrl}
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+                  <GoldButton onClick={copyFeedUrl}>{feedCopied ? 'COPIED ✓' : 'COPY FEED URL'}</GoldButton>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic', marginBottom: 10 }}>
+                  Treat this URL like a password — anyone with it can read your training calendar.
+                  Outlook refreshes subscribed calendars every few hours.
+                </div>
+              </>
+            ) : (
+              <div style={{ marginBottom: 10 }}>
+                <GhostButton onClick={showFeedUrl} disabled={busy}>
+                  {busy ? 'WORKING…' : 'GET MY FEED URL'}
+                </GhostButton>
+              </div>
+            )}
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.5, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
               If the automatic merge ever gets stuck, force a direction from the device you trust:
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

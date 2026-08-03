@@ -12,6 +12,7 @@ const KEYS = {
   affirmations: 'forge_affirmations',
   daily: 'forge_daily',
   habits: 'forge_habits',
+  calendarEvents: 'forge_calendar_events',
 };
 
 // Keys that sync to the cloud when signed in (everything except the API key,
@@ -358,6 +359,15 @@ export const storage = {
   },
   setAffirmations(a) {
     safeSet(KEYS.affirmations, a);
+  },
+
+  // Coach diary events (food, prep, admin) served to Outlook via the live feed
+  getCalendarEvents() {
+    const e = safeGet(KEYS.calendarEvents, []);
+    return Array.isArray(e) ? e : [];
+  },
+  setCalendarEvents(e) {
+    safeSet(KEYS.calendarEvents, e);
   },
 
   getHabits() {

@@ -16,7 +16,8 @@ import {
   stripForgeBlocks,
 } from './parsers.js';
 import { buildEventsIcs, downloadIcs } from './calendar.js';
-import { todayIso } from './storage.js';
+import { storage, todayIso } from './storage.js';
+import { getSyncStatus } from './sync.js';
 
 function formatMessage(text, accentColor) {
   if (!text) return [];
@@ -570,7 +571,19 @@ export default function ChatWindow({
               onClick={() => {
                 const events = parseDiaryBlock(lastDiaryContent);
                 if (!events) return;
-                downloadIcs(`forge-diary-${todayIso()}.ics`, buildEventsIcs(events));
+                // Save into the synced diary store — the live Outlook feed
+                // serves these. Falls back to .ics download when not signed in.
+                const existing = storage.getCalendarEvents();
+                const seen = new Set(existing.map((e) => `${e.date}|${e.title}`));
+                const fresh = events.filter((e) => !seen.has(`${e.date}|${e.title}`));
+                if (fresh.length) storage.setCalendarEvents([...existing, ...fresh]);
+                if (getSyncStatus().user) {
+                  window.alert(
+                    `${fresh.length ? `Added ${fresh.length} event${fresh.length === 1 ? '' : 's'} to your diary` : 'Those events are already in your diary'} — Outlook picks them up automatically via your subscribed FORGE calendar.`,
+                  );
+                } else {
+                  downloadIcs(`forge-diary-${todayIso()}.ics`, buildEventsIcs(events));
+                }
               }}
               style={{
                 padding: '6px 12px',
@@ -584,7 +597,7 @@ export default function ChatWindow({
                 cursor: 'pointer',
               }}
             >
-              📅 ADD TO CALENDAR (.ICS)
+              📅 ADD TO DIARY
             </button>
           )}
           {showSavePlanBtn && (
