@@ -363,6 +363,7 @@ export default function App() {
 
   const [view, setView] = useState('home');
   const [activeCoach, setActiveCoach] = useState('');
+  const [updateReady, setUpdateReady] = useState(false);
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT,
   );
@@ -404,6 +405,27 @@ export default function App() {
       cancelled = true;
       document.removeEventListener('visibilitychange', onVis);
     };
+  }, []);
+
+  useEffect(() => {
+    // Stale-PWA guard: compare the server's index.html fingerprint on focus;
+    // when a new deploy is live, offer a one-tap reload.
+    let baseline = null;
+    async function check() {
+      try {
+        const r = await fetch('/', { method: 'HEAD', cache: 'no-store' });
+        const tag = r.headers.get('etag') || r.headers.get('last-modified');
+        if (!tag) return;
+        if (baseline === null) baseline = tag;
+        else if (tag !== baseline) setUpdateReady(true);
+      } catch {}
+    }
+    check();
+    const onVis = () => {
+      if (document.visibilityState === 'visible') check();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
   }, []);
 
   const skipFirstPush = useRef(true);
@@ -795,6 +817,32 @@ export default function App() {
     }
   }
 
+  const updateBanner = updateReady ? (
+    <button
+      onClick={() => window.location.reload()}
+      style={{
+        position: 'fixed',
+        top: 'calc(8px + var(--safe-top))',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 200,
+        padding: '10px 18px',
+        borderRadius: 999,
+        background: 'linear-gradient(135deg, #c8922a 0%, rgba(200, 146, 42, 0.85) 100%)',
+        color: '#1a1408',
+        fontFamily: 'var(--font-display)',
+        fontSize: 12,
+        letterSpacing: '0.14em',
+        fontWeight: 600,
+        border: 'none',
+        cursor: 'pointer',
+        boxShadow: '0 6px 24px rgba(0,0,0,0.5)',
+      }}
+    >
+      🔄 NEW VERSION READY — TAP TO UPDATE
+    </button>
+  ) : null;
+
   if (!isMobile) {
     return (
       <div style={{ display: 'flex', width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -822,6 +870,7 @@ export default function App() {
         >
           {body}
         </main>
+        {updateBanner}
       </div>
     );
   }
@@ -841,6 +890,7 @@ export default function App() {
           }}
         />
       )}
+      {updateBanner}
     </div>
   );
 }
