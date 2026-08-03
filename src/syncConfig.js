@@ -8,8 +8,8 @@
 // The anon key is designed to be public — data is protected by Row Level
 // Security, so each signed-in user can only ever read/write their own rows.
 
-const HARDCODED_URL = ''; // e.g. 'https://abcdefgh.supabase.co'
-const HARDCODED_ANON_KEY = ''; // the long 'anon public' key from Settings → API keys
+const HARDCODED_URL = 'https://fbkltxhywiqjtmqvxytw.supabase.co';
+const HARDCODED_ANON_KEY = 'sb_publishable_db1GkFe5qadPON4cgL-aeQ_aLxhMlLQ'; // publishable key — safe to share publicly, data protected by RLS
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || HARDCODED_URL;
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || HARDCODED_ANON_KEY;
