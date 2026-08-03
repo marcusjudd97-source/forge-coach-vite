@@ -15,12 +15,20 @@ import AccountSync from './AccountSync.jsx';
 export default function SettingsView({
   voiceNotes,
   onVoiceNotesChange,
+  goals,
+  onGoalsChange,
+  affirmations,
+  onAffirmationsChange,
   onChangeApiKey,
   onResetAll,
   onDataImported,
 }) {
   const [draft, setDraft] = useState(voiceNotes);
   const [voiceSaved, setVoiceSaved] = useState(false);
+  const [goalsDraft, setGoalsDraft] = useState(goals);
+  const [goalsSaved, setGoalsSaved] = useState(false);
+  const [affirmDraft, setAffirmDraft] = useState((affirmations || []).join('\n'));
+  const [affirmSaved, setAffirmSaved] = useState(false);
   const [importMsg, setImportMsg] = useState('');
   const [keyShown, setKeyShown] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
@@ -42,6 +50,26 @@ export default function SettingsView({
     }
   }
 
+  function updateGoal(idx, key, v) {
+    setGoalsDraft((gs) => gs.map((g, i) => (i === idx ? { ...g, [key]: v } : g)));
+    setGoalsSaved(false);
+  }
+  function saveGoals() {
+    onGoalsChange(goalsDraft);
+    setGoalsSaved(true);
+    setTimeout(() => setGoalsSaved(false), 2200);
+  }
+  function saveAffirmations() {
+    const list = affirmDraft
+      .split('\n')
+      .map((l) => l.trim().replace(/^[-*•]\s*/, ''))
+      .filter(Boolean);
+    if (!list.length) return;
+    onAffirmationsChange(list);
+    setAffirmSaved(true);
+    setTimeout(() => setAffirmSaved(false), 2200);
+  }
+
   function updateVoice(id, v) {
     setDraft((d) => ({ ...d, [id]: v }));
     setVoiceSaved(false);
@@ -57,7 +85,7 @@ export default function SettingsView({
   function exportData() {
     const dump = {
       exportedAt: new Date().toISOString(),
-      version: 3,
+      version: 4,
       profile: storage.getProfile(),
       planText: storage.getPlanText(),
       schedule: storage.getSchedule(),
@@ -65,6 +93,10 @@ export default function SettingsView({
       voiceNotes: storage.getVoiceNotes(),
       chats: storage.getChats(),
       milestones: storage.getMilestones(),
+      goals: storage.getGoals(),
+      affirmations: storage.getAffirmations(),
+      daily: storage.getDaily(),
+      habits: storage.getHabits(),
     };
     const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -102,6 +134,10 @@ export default function SettingsView({
       if (data.voiceNotes) storage.setVoiceNotes(data.voiceNotes);
       if (data.chats) storage.setChats(data.chats);
       if (data.milestones) storage.setMilestones(data.milestones);
+      if (data.goals) storage.setGoals(data.goals);
+      if (data.affirmations) storage.setAffirmations(data.affirmations);
+      if (data.daily) storage.setDaily(data.daily);
+      if (data.habits) storage.setHabits(data.habits);
       onDataImported?.();
       setImportMsg(`Imported backup from ${data.exportedAt || 'unknown date'}.`);
     } catch (err) {
@@ -122,6 +158,69 @@ export default function SettingsView({
       <ViewHeader title="SETTINGS" subtitle="Account, voice, backup, and key management." />
       <ViewBody>
         <AccountSync />
+
+        <Section title="North-star goals">
+          <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 14, lineHeight: 1.5 }}>
+            Your three big goals — shown on Home and the Day sheet, and every coach keeps them in mind.
+            The "why" is what you'll read every morning; make it yours.
+          </div>
+          {(goalsDraft || []).map((g, idx) => (
+            <div
+              key={g.id || idx}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '56px 1fr 150px',
+                gap: 10,
+                padding: 12,
+                borderRadius: 12,
+                background: 'var(--bg3)',
+                border: '1px solid var(--border)',
+                marginBottom: 10,
+              }}
+            >
+              <Field label="Icon">
+                <TextInput value={g.emoji} onChange={(v) => updateGoal(idx, 'emoji', v)} />
+              </Field>
+              <Field label="Goal">
+                <TextInput value={g.title} onChange={(v) => updateGoal(idx, 'title', v)} />
+              </Field>
+              <Field label="Target date">
+                <TextInput type="date" value={g.targetDate} onChange={(v) => updateGoal(idx, 'targetDate', v)} />
+              </Field>
+              <div style={{ gridColumn: 'span 3' }}>
+                <Field label="Why this matters (read it daily)">
+                  <TextInput
+                    value={g.why}
+                    onChange={(v) => updateGoal(idx, 'why', v)}
+                    placeholder="The reason that gets you up when the alarm's early"
+                  />
+                </Field>
+              </div>
+            </div>
+          ))}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <GoldButton onClick={saveGoals}>{goalsSaved ? 'SAVED ✓' : 'SAVE GOALS'}</GoldButton>
+          </div>
+        </Section>
+
+        <Section title="Daily affirmations">
+          <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 14, lineHeight: 1.5 }}>
+            One per line — read morning and evening on the Day sheet. Ask{' '}
+            <strong style={{ color: 'var(--gold)' }}>Soren</strong> to sharpen them or write new ones
+            tied to your goals; he can save a set straight from chat.
+          </div>
+          <TextArea
+            rows={8}
+            value={affirmDraft}
+            onChange={(v) => {
+              setAffirmDraft(v);
+              setAffirmSaved(false);
+            }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+            <GoldButton onClick={saveAffirmations}>{affirmSaved ? 'SAVED ✓' : 'SAVE AFFIRMATIONS'}</GoldButton>
+          </div>
+        </Section>
 
         <Section title="Coach voice notes">
           <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 14, lineHeight: 1.5 }}>

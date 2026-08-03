@@ -8,6 +8,10 @@ const KEYS = {
   voiceNotes: 'forge_voice_notes',
   chats: 'forge_chats',
   milestones: 'forge_milestones',
+  goals: 'forge_goals',
+  affirmations: 'forge_affirmations',
+  daily: 'forge_daily',
+  habits: 'forge_habits',
 };
 
 // Keys that sync to the cloud when signed in (everything except the API key,
@@ -174,6 +178,75 @@ export const defaultVoiceNotes = {
   mentalPrep: '',
 };
 
+export const defaultGoals = [
+  {
+    id: 'g1',
+    emoji: '🚗',
+    title: 'Business — 40 cars sold per month',
+    targetDate: '2026-12-31',
+    why: '',
+  },
+  {
+    id: 'g2',
+    emoji: '🏊',
+    title: 'Ironman',
+    targetDate: '2027-08-31',
+    why: '',
+  },
+  {
+    id: 'g3',
+    emoji: '🏠',
+    title: 'Buy my own house',
+    targetDate: '2027-03-31',
+    why: '',
+  },
+];
+
+export const defaultAffirmations = [
+  'I am organised',
+  'I have unwavering self-discipline',
+  'I am an Ironman',
+  'I am in control of my finances',
+  'I am a multimillionaire',
+  'I wake up before anyone else and crack on',
+  'I am a role model to those around me',
+  'I am a business owner and I take charge of my business and where it is heading',
+];
+
+// Habit: { id, name, type: 'check' | 'count' | 'number', target, unit }
+// - check: done/not done (target/unit unused)
+// - count: times per day, done when value >= target (e.g. 2x water bottles)
+// - number: free number with a unit (£, min, pages); done when value >= target,
+//   or when any value is entered if no target is set
+export const defaultHabits = [
+  { id: 'h1', name: 'Up before everyone else', type: 'check', target: 0, unit: '' },
+  { id: 'h2', name: '15 min towards a goal', type: 'check', target: 0, unit: '' },
+];
+
+export const emptyDaySheet = () => ({
+  habits: {},
+  morning: {
+    affirmationsRead: false,
+    focus: '',
+    action15: '',
+    todos: '',
+    budgetNote: '',
+  },
+  evening: {
+    wentWell: '',
+    doBetter: '',
+    learned: '',
+    review: '',
+    gratitude1: '',
+    gratitude2: '',
+    gratitude3: '',
+    habitsDone: false,
+    tomorrowPlanned: false,
+    affirmationsRead: false,
+  },
+  journal: '',
+});
+
 export const emptyLogEntry = () => ({
   id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
   date: new Date().toISOString().slice(0, 10),
@@ -262,6 +335,39 @@ export const storage = {
   },
   setMilestones(m) {
     safeSet(KEYS.milestones, m);
+  },
+
+  getGoals() {
+    const g = safeGet(KEYS.goals, null);
+    return Array.isArray(g) && g.length ? g : defaultGoals;
+  },
+  setGoals(g) {
+    safeSet(KEYS.goals, g);
+  },
+
+  getAffirmations() {
+    const a = safeGet(KEYS.affirmations, null);
+    return Array.isArray(a) && a.length ? a : defaultAffirmations;
+  },
+  setAffirmations(a) {
+    safeSet(KEYS.affirmations, a);
+  },
+
+  getHabits() {
+    const h = safeGet(KEYS.habits, null);
+    return Array.isArray(h) ? h : defaultHabits;
+  },
+  setHabits(h) {
+    safeSet(KEYS.habits, h);
+  },
+
+  // { [dateIso]: {habits, morning, evening, journal} }
+  getDaily() {
+    const d = safeGet(KEYS.daily, {});
+    return d && typeof d === 'object' ? d : {};
+  },
+  setDaily(d) {
+    safeSet(KEYS.daily, d);
   },
 
   getSchedule() {

@@ -5,10 +5,12 @@ import {
   hasMilestonesBlock,
   hasProfileBlock,
   hasDiaryBlock,
+  hasAffirmationsBlock,
   parseWeekBlock,
   parseMilestonesBlock,
   parseProfileBlock,
   parseDiaryBlock,
+  parseAffirmationsBlock,
   stripForgeBlocks,
 } from './parsers.js';
 import { buildEventsIcs, downloadIcs } from './calendar.js';
@@ -119,10 +121,14 @@ export default function ChatWindow({
   log,
   voiceNote,
   milestones,
+  goals,
+  affirmations,
+  daily,
   onSavePlanFromMessage,
   onApplyWeekPlan,
   onApplyMilestones,
   onApplyProfileUpdates,
+  onApplyAffirmations,
   onClearChat,
 }) {
   const [input, setInput] = useState('');
@@ -167,6 +173,9 @@ export default function ChatWindow({
       log,
       voiceNote,
       milestones,
+      goals,
+      affirmations,
+      daily,
     });
     return buildSystemPrompt(coach.systemPrompt, ctx);
   }
@@ -398,6 +407,7 @@ export default function ChatWindow({
     [...(messages || [])].reverse().find((m) => m.role === 'assistant' && hasDiaryBlock(m.content))
       ?.content || '';
   const showDiaryBtn = !!lastDiaryContent;
+  const showAffirmationsBtn = hasAffirmationsBlock(lastAssistantContent);
 
   return (
     <div
@@ -461,6 +471,27 @@ export default function ChatWindow({
               }}
             >
               APPLY MILESTONES
+            </button>
+          )}
+          {showAffirmationsBtn && onApplyAffirmations && (
+            <button
+              onClick={() => {
+                const parsed = parseAffirmationsBlock(lastAssistantContent);
+                if (parsed) onApplyAffirmations(parsed);
+              }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 8,
+                background: coach.accentDim,
+                border: `1px solid ${coach.accentBorder}`,
+                color: coach.accentColor,
+                fontFamily: 'var(--font-display)',
+                fontSize: 11,
+                letterSpacing: '0.18em',
+                cursor: 'pointer',
+              }}
+            >
+              SAVE AFFIRMATIONS
             </button>
           )}
           {showDiaryBtn && (

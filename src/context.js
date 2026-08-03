@@ -208,6 +208,50 @@ function dateBlock() {
 - When the athlete mentions "this week," "next week" or gives a specific date, use it. Otherwise default to ${defaultWeekStarts}.`;
 }
 
+function goalsBlock(goals) {
+  if (!Array.isArray(goals) || !goals.length) return '';
+  const lines = goals.map((g) => {
+    const d = daysUntil(g.targetDate);
+    const bits = [`- ${g.emoji || '🎯'} **${g.title}**`];
+    if (g.targetDate) bits.push(`target ${g.targetDate}${d != null && d >= 0 ? ` (${d} days)` : ''}`);
+    if (g.why) bits.push(`why: ${g.why}`);
+    return bits.join(' — ');
+  });
+  return `## The Athlete's Three North-Star Goals
+Everything this athlete does is meant to serve these. Tie your coaching back to them — when they drift or chase something shiny, gently pull them back to these three:
+${lines.join('\n')}`;
+}
+
+function affirmationsBlock(affirmations) {
+  if (!Array.isArray(affirmations) || !affirmations.length) return '';
+  return `## Daily Affirmations (the athlete reads these every morning and evening)
+${affirmations.map((a) => `- ${a}`).join('\n')}`;
+}
+
+function dailySheetsBlock(daily) {
+  if (!daily || typeof daily !== 'object') return '';
+  const today = todayIso();
+  const lines = [];
+  for (let i = 2; i >= 0; i--) {
+    const d = addDays(today, -i);
+    const s = daily[d];
+    if (!s) continue;
+    const bits = [];
+    if (s.morning?.focus) bits.push(`focus: ${s.morning.focus}`);
+    if (s.morning?.action15) bits.push(`15-min goal action: ${s.morning.action15}`);
+    if (s.evening?.wentWell) bits.push(`went well: ${s.evening.wentWell}`);
+    if (s.evening?.doBetter) bits.push(`do better: ${s.evening.doBetter}`);
+    if (s.evening?.learned) bits.push(`learned: ${s.evening.learned}`);
+    const grats = [s.evening?.gratitude1, s.evening?.gratitude2, s.evening?.gratitude3].filter(Boolean);
+    if (grats.length) bits.push(`grateful for: ${grats.join('; ')}`);
+    if (!bits.length) continue;
+    lines.push(`- **${d === today ? 'Today' : d}** — ${bits.join(' · ')}`);
+  }
+  if (!lines.length) return '';
+  return `## Daily Sheets (last 3 days — the athlete's own words)
+${lines.join('\n')}`;
+}
+
 function milestonesBlock(milestones) {
   if (!Array.isArray(milestones) || milestones.length === 0) return '';
   const sorted = [...milestones].sort((a, b) => (a.targetDate || '').localeCompare(b.targetDate || ''));
@@ -225,11 +269,24 @@ function voiceBlock(voiceNote) {
   return `## Athlete's Voice Preferences for You\nThe athlete has specifically asked you to coach them in the following way. Honour it unless it conflicts with their safety:\n\n"${voiceNote.trim()}"`;
 }
 
-export function buildAthleteContext({ profile, planText, schedule, log, voiceNote, milestones }) {
+export function buildAthleteContext({
+  profile,
+  planText,
+  schedule,
+  log,
+  voiceNote,
+  milestones,
+  goals,
+  affirmations,
+  daily,
+}) {
   const blocks = [
     dateBlock(),
+    goalsBlock(goals),
     countdownBlock(profile),
     profileBlock(profile),
+    affirmationsBlock(affirmations),
+    dailySheetsBlock(daily),
     planTextBlock(planText),
     scheduleBlock(schedule),
     milestonesBlock(milestones),

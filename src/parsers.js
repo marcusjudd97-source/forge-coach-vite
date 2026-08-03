@@ -4,6 +4,7 @@ const WEEK_BLOCK_RE = /<<<\s*FORGE-WEEKPLAN\s*([\s\S]*?)>>>/i;
 const MILESTONE_BLOCK_RE = /<<<\s*FORGE-MILESTONES\s*([\s\S]*?)>>>/i;
 const PROFILE_BLOCK_RE = /<<<\s*FORGE-PROFILE\s*([\s\S]*?)>>>/i;
 const DIARY_BLOCK_RE = /<<<\s*FORGE-DIARY\s*([\s\S]*?)>>>/i;
+const AFFIRM_BLOCK_RE = /<<<\s*FORGE-AFFIRMATIONS\s*([\s\S]*?)>>>/i;
 
 export function hasWeekBlock(text) {
   return typeof text === 'string' && WEEK_BLOCK_RE.test(text);
@@ -15,6 +16,21 @@ export function hasMilestonesBlock(text) {
 
 export function hasProfileBlock(text) {
   return typeof text === 'string' && PROFILE_BLOCK_RE.test(text);
+}
+
+export function hasAffirmationsBlock(text) {
+  return typeof text === 'string' && AFFIRM_BLOCK_RE.test(text);
+}
+
+export function parseAffirmationsBlock(text) {
+  if (!text) return null;
+  const match = text.match(AFFIRM_BLOCK_RE);
+  if (!match) return null;
+  const lines = match[1]
+    .split('\n')
+    .map((l) => l.trim().replace(/^[-*•]\s*/, ''))
+    .filter(Boolean);
+  return lines.length ? lines.slice(0, 15) : null;
 }
 
 // Fallback for replies truncated mid-block: open marker but no closing >>>
@@ -159,6 +175,7 @@ export function stripForgeBlocks(text) {
     .replace(MILESTONE_BLOCK_RE, '')
     .replace(PROFILE_BLOCK_RE, '')
     .replace(DIARY_BLOCK_RE, '')
+    .replace(AFFIRM_BLOCK_RE, '')
     .replace(DIARY_BLOCK_OPEN_RE, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

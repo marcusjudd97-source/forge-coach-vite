@@ -1,6 +1,7 @@
 import { daysUntil, todayIso, addDays, formatPretty } from './storage.js';
 import { Section, GoldButton, GhostButton, ViewHeader, ViewBody } from './ui.jsx';
 import { COACHES, COACH_ORDER } from './coaches.js';
+import { morningDone, eveningDone, streakCount } from './DayView.jsx';
 
 function hasMasterPlan(planText) {
   return !!(planText && planText.trim().length > 40);
@@ -38,6 +39,8 @@ export default function HomeView({
   planText,
   schedule,
   log,
+  goals,
+  daily,
   onGoTo,
   onOpenCoach,
   hasApiKey,
@@ -63,6 +66,62 @@ export default function HomeView({
         subtitle="Today's focus, your coaches, and your history in one place."
       />
       <ViewBody>
+        {(goals || []).length > 0 && (
+          <Section>
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 11,
+                letterSpacing: '0.26em',
+                color: 'var(--text-dim)',
+                marginBottom: 10,
+              }}
+            >
+              WHAT I AM WORKING TOWARDS
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+              {goals.map((g) => {
+                const gd = daysUntil(g.targetDate);
+                return (
+                  <div key={g.id} style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 16 }}>{g.emoji}</span>
+                    <span style={{ fontSize: 15, color: 'var(--text)', fontWeight: 600 }}>{g.title}</span>
+                    {gd != null && gd >= 0 && (
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 12, letterSpacing: '0.1em', color: 'var(--gold)' }}>
+                        {gd} DAYS
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {(() => {
+              const sheet = daily?.[today];
+              const md = morningDone(sheet);
+              const ed = eveningDone(sheet);
+              const streak = streakCount(daily);
+              return (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <GoldButton onClick={() => onGoTo('day')} style={{ padding: '10px 18px', fontSize: 13 }}>
+                    OPEN TODAY'S SHEET →
+                  </GoldButton>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 11, letterSpacing: '0.16em', color: md ? '#6fb241' : 'var(--text-dim)' }}>
+                    MORNING {md ? '✓' : '○'}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 11, letterSpacing: '0.16em', color: ed ? '#6fb241' : 'var(--text-dim)' }}>
+                    EVENING {ed ? '✓' : '○'}
+                  </span>
+                  {streak > 0 && (
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 11, letterSpacing: '0.16em', color: 'var(--gold)' }}>
+                      🔥 {streak} DAY STREAK
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+          </Section>
+        )}
+
         {profileFilled && (
           <Section>
             <div

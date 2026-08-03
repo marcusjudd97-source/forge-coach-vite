@@ -3,6 +3,7 @@ import ApiKeySetup from './ApiKeySetup.jsx';
 import ChatWindow from './ChatWindow.jsx';
 import HomeView from './HomeView.jsx';
 import PlanView from './PlanView.jsx';
+import DayView from './DayView.jsx';
 import ProfileView from './ProfileView.jsx';
 import LogView from './LogView.jsx';
 import SettingsView from './SettingsView.jsx';
@@ -14,6 +15,7 @@ const MOBILE_BREAKPOINT = 640;
 
 const NAV = [
   { id: 'home', label: 'Home', icon: '🏠' },
+  { id: 'day', label: 'Day', icon: '☀️' },
   { id: 'plan', label: 'Plan', icon: '📋' },
   { id: 'coaches', label: 'Coaches', icon: '💬' },
   { id: 'profile', label: 'Profile', icon: '👤' },
@@ -21,6 +23,7 @@ const NAV = [
 
 const DESKTOP_NAV = [
   { id: 'home', label: 'Home', icon: '🏠' },
+  { id: 'day', label: 'Day', icon: '☀️' },
   { id: 'plan', label: 'Plan', icon: '📋' },
   { id: 'coaches', label: 'Coaches', icon: '💬' },
   { id: 'log', label: 'Log (history)', icon: '📊' },
@@ -344,6 +347,10 @@ export default function App() {
   const [voiceNotes, setVoiceNotes] = useState(() => storage.getVoiceNotes());
   const [chats, setChats] = useState(() => storage.getChats());
   const [milestones, setMilestones] = useState(() => storage.getMilestones());
+  const [goals, setGoals] = useState(() => storage.getGoals());
+  const [affirmations, setAffirmations] = useState(() => storage.getAffirmations());
+  const [daily, setDaily] = useState(() => storage.getDaily());
+  const [habits, setHabits] = useState(() => storage.getHabits());
 
   const [view, setView] = useState('home');
   const [activeCoach, setActiveCoach] = useState('');
@@ -384,13 +391,7 @@ export default function App() {
 
   function handleResetAll() {
     storage.resetAll();
-    setProfile(storage.getProfile());
-    setPlanText(storage.getPlanText());
-    setSchedule(storage.getSchedule());
-    setLog(storage.getLog());
-    setVoiceNotes(storage.getVoiceNotes());
-    setChats(storage.getChats());
-    setMilestones(storage.getMilestones());
+    handleDataImported();
     setView('home');
     setActiveCoach('');
   }
@@ -403,6 +404,10 @@ export default function App() {
     setVoiceNotes(storage.getVoiceNotes());
     setChats(storage.getChats());
     setMilestones(storage.getMilestones());
+    setGoals(storage.getGoals());
+    setAffirmations(storage.getAffirmations());
+    setDaily(storage.getDaily());
+    setHabits(storage.getHabits());
   }
 
   function applyWeekPlan(parsed) {
@@ -434,6 +439,13 @@ export default function App() {
     storage.setMilestones(next);
     setMilestones(next);
     window.alert(`Added ${parsed.length} milestones. See Plan → Milestones.`);
+  }
+
+  function applyAffirmations(parsed) {
+    if (!Array.isArray(parsed) || !parsed.length) return;
+    storage.setAffirmations(parsed);
+    setAffirmations(parsed);
+    window.alert(`Saved ${parsed.length} affirmations — they're now on your Day sheet every morning and evening.`);
   }
 
   function applyProfileUpdates(updates) {
@@ -488,6 +500,16 @@ export default function App() {
           setVoiceNotes(v);
           storage.setVoiceNotes(v);
         }}
+        goals={goals}
+        onGoalsChange={(g) => {
+          setGoals(g);
+          storage.setGoals(g);
+        }}
+        affirmations={affirmations}
+        onAffirmationsChange={(a) => {
+          setAffirmations(a);
+          storage.setAffirmations(a);
+        }}
         onChangeApiKey={handleChangeApiKey}
         onResetAll={handleResetAll}
         onDataImported={handleDataImported}
@@ -519,11 +541,26 @@ export default function App() {
         planText={planText}
         schedule={schedule}
         log={log}
+        goals={goals}
+        daily={daily}
         hasApiKey={!!apiKey}
         onGoTo={(v) => setView(v)}
         onOpenCoach={(id) => openCoach(id)}
       />
     );
+  } else if (view === 'day') {
+    body = (
+      <DayView
+        goals={goals}
+        affirmations={affirmations}
+        daily={daily}
+        onDailyChange={setDaily}
+        schedule={schedule}
+        habits={habits}
+        onHabitsChange={setHabits}
+      />
+    );
+    mobileTitle = 'TODAY';
   } else if (view === 'plan') {
     body = (
       <PlanView
@@ -628,10 +665,14 @@ export default function App() {
             log={log}
             voiceNote={voiceNotes[coach.id]}
             milestones={milestones}
+            goals={goals}
+            affirmations={affirmations}
+            daily={daily}
             onSavePlanFromMessage={savePlanFromMessage}
             onApplyWeekPlan={applyWeekPlan}
             onApplyMilestones={applyMilestones}
             onApplyProfileUpdates={applyProfileUpdates}
+            onApplyAffirmations={applyAffirmations}
             onClearChat={() => clearCoachChat(coach.id)}
           />
         </>
